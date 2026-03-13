@@ -2195,7 +2195,7 @@ class ItemSeparadoProducao(db.Model):  # type: ignore
     )
 
     id = db.Column(db.Integer, primary_key=True)
-    ordem_producao_id = db.Column(db.Integer, db.ForeignKey('ordens_producao.id'), nullable=False)
+    ordem_producao_id = db.Column(db.Integer, db.ForeignKey('ordens_producao.id'), nullable=True)  # Nullable - new flow doesn't use OrdemProducao
     classificacao_grade_id = db.Column(db.Integer, db.ForeignKey('classificacoes_grade.id'), nullable=False)
     
     # Dados do item
@@ -2232,7 +2232,7 @@ class ItemSeparadoProducao(db.Model):  # type: ignore
         return {
             'id': self.id,
             'ordem_producao_id': self.ordem_producao_id,
-            'ordem_producao_numero': self.ordem_producao.numero_op if self.ordem_producao else None,
+            'ordem_producao_numero': (self.ordem_producao.numero_op if hasattr(self, 'ordem_producao') and self.ordem_producao else None),
             'classificacao_grade_id': self.classificacao_grade_id,
             'classificacao_nome': self.classificacao_grade.nome if self.classificacao_grade else None,
             'classificacao_categoria': self.classificacao_grade.categoria if self.classificacao_grade else None,

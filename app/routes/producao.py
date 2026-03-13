@@ -997,23 +997,7 @@ def listar_estoque_agregado():
 
 
 # ============================
-# PÁGINAS HTML
-# ============================
-
-@bp.route('/', methods=['GET'])
-def pagina_producao():
-    """Página principal do módulo de produção"""
-    return render_template('producao.html')
-
-
-@bp.route('/ordem/<int:id>', methods=['GET'])
-def pagina_ordem(id):
-    """Página de detalhes/separação de uma OP"""
-    return render_template('producao-ordem.html')
-
-
-# ============================
-# EXPORTAÇÕES
+# EXPORTAÇÕES (mantidas para compatibilidade)
 # ============================
 
 @bp.route('/ordens/<int:id>/exportar-html', methods=['GET'])

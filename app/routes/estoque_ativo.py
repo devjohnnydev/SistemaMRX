@@ -3,6 +3,8 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models import db, Lote, BagProducao, ItemSeparadoProducao, ClassificacaoGrade, ItemSolicitacao, MaterialBase, Usuario, Fornecedor, Solicitacao, OrdemCompra
 from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy import func
+from datetime import datetime
+import uuid
 import logging
 
 logger = logging.getLogger(__name__)
@@ -532,4 +534,682 @@ def obter_resumo_compra():
         import traceback
         traceback.print_exc()
         return jsonify({'erro': str(e), 'show_tab': False}), 500
+
+
+# ============================
+# PRODUÇÃO - Enviar para Produção (novo fluxo)
+# ============================
+
+@bp.route('/producao/enviar', methods=['POST'])
+@jwt_required()
+def enviar_para_producao():
+    """Envia sublote(s) para produção - muda status para em_producao e reserva"""
+    try:
+        data = request.get_json()
+        sublote_ids = data.get('sublote_ids', [])
+        
+        if not sublote_ids:
+            return jsonify({'erro': 'Nenhum sublote selecionado'}), 400
+        
+        current_user_id = get_jwt_identity()
+        sublotes_enviados = []
+        
+        for sid in sublote_ids:
+            sublote = Lote.query.get(sid)
+            if not sublote:
+                continue
+            if sublote.status == 'em_producao':
+                continue
+            
+            sublote.status = 'em_producao'
+            sublote.reservado = True
+            sublote.reservado_para = 'Produção'
+            sublote.reservado_por_id = current_user_id
+            sublote.reservado_em = datetime.utcnow()
+            sublotes_enviados.append(sublote.numero_lote)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'sucesso': True,
+            'mensagem': f'{len(sublotes_enviados)} material(is) enviado(s) para produção',
+            'sublotes': sublotes_enviados
+        })
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f'Erro ao enviar para produção: {str(e)}')
+        return jsonify({'erro': str(e)}), 500
+
+
+@bp.route('/producao/sublote/<int:sublote_id>', methods=['GET'])
+@jwt_required()
+def obter_detalhes_producao(sublote_id):
+    """Obtém detalhes de um sublote em produção para o modal"""
+    try:
+        sublote = Lote.query.options(
+            joinedload(Lote.tipo_lote),
+            joinedload(Lote.fornecedor),
+            joinedload(Lote.lote_pai)
+        ).get_or_404(sublote_id)
+        
+        peso_original = float(sublote.peso_liquido or sublote.peso_total_kg or 0)
+        
+        # Buscar itens já separados deste sublote
+        itens_separados = ItemSeparadoProducao.query.filter_by(
+            entrada_estoque_id=sublote_id
+        ).all()
+        
+        peso_separado = sum(float(i.peso_kg or 0) for i in itens_separados)
+        peso_restante = peso_original - peso_separado
+        
+        # Nome do material
+        nome_material = 'Material'
+        if sublote.observacoes:
+            if sublote.observacoes.startswith('MATERIAL:'):
+                nome_material = sublote.observacoes.split('|')[0].replace('MATERIAL:', '').strip()
+            elif sublote.observacoes.startswith('MATERIAL_MANUAL:'):
+                nome_material = sublote.observacoes.split('|')[0].replace('MATERIAL_MANUAL:', '').strip()
+        elif sublote.tipo_lote:
+            nome_material = sublote.tipo_lote.nome
+        
+        # Calcular valor/kg originais (da OC)
+        valor_por_kg = 0
+        valor_total_lote = float(sublote.valor_total or 0)
+        if valor_total_lote > 0 and peso_original > 0:
+            valor_por_kg = valor_total_lote / peso_original
+        else:
+            # Tentar de itens da solicitação
+            if sublote.lote_pai and sublote.lote_pai.solicitacao_origem_id:
+                itens_solic = ItemSolicitacao.query.filter_by(
+                    solicitacao_id=sublote.lote_pai.solicitacao_origem_id,
+                ).all()
+                if itens_solic:
+                    total_val = sum(float(i.valor_calculado or 0) for i in itens_solic)
+                    total_peso = sum(float(i.peso_kg or 0) for i in itens_solic)
+                    if total_peso > 0:
+                        valor_por_kg = total_val / total_peso
+        
+        # Listar itens já separados
+        itens_data = []
+        for item in itens_separados:
+            itens_data.append({
+                'id': item.id,
+                'nome_item': item.nome_item,
+                'peso_kg': float(item.peso_kg),
+                'classificacao_nome': item.classificacao_grade.nome if item.classificacao_grade else 'N/A',
+                'classificacao_categoria': item.classificacao_grade.categoria if item.classificacao_grade else 'N/A',
+                'valor_estimado': float(item.valor_estimado or 0),
+                'data_separacao': item.data_separacao.isoformat() if item.data_separacao else None,
+                'observacoes': item.observacoes
+            })
+        
+        return jsonify({
+            'sublote_id': sublote.id,
+            'numero_lote': sublote.numero_lote,
+            'nome_material': nome_material,
+            'fornecedor_nome': sublote.fornecedor.nome if sublote.fornecedor else 'N/A',
+            'peso_original': round(peso_original, 3),
+            'peso_separado': round(peso_separado, 3),
+            'peso_restante': round(max(0, peso_restante), 3),
+            'valor_por_kg': round(valor_por_kg, 2),
+            'valor_total_lote': round(valor_total_lote, 2),
+            'status': sublote.status,
+            'itens_separados': itens_data,
+            'total_itens': len(itens_data)
+        })
+    except Exception as e:
+        logger.error(f'Erro ao obter detalhes produção sublote {sublote_id}: {str(e)}')
+        return jsonify({'erro': str(e)}), 500
+
+
+@bp.route('/producao/sublote/<int:sublote_id>/adicionar-item', methods=['POST'])
+@jwt_required()
+def adicionar_item_separado(sublote_id):
+    """Adiciona um item separado (quebrando material em partes)"""
+    try:
+        sublote = Lote.query.get_or_404(sublote_id)
+        data = request.get_json()
+        
+        nome_item = data.get('nome_item', '').strip()
+        peso_kg = float(data.get('peso_kg', 0))
+        classificacao_id = data.get('classificacao_id')
+        preco_kg = float(data.get('preco_kg', 0))
+        observacoes = data.get('observacoes', '')
+        
+        if not nome_item:
+            return jsonify({'erro': 'Nome do material é obrigatório'}), 400
+        if peso_kg <= 0:
+            return jsonify({'erro': 'Peso deve ser maior que zero'}), 400
+        if not classificacao_id:
+            return jsonify({'erro': 'Classificação é obrigatória'}), 400
+        
+        # Verificar peso disponível
+        itens_existentes = ItemSeparadoProducao.query.filter_by(
+            entrada_estoque_id=sublote_id
+        ).all()
+        peso_ja_separado = sum(float(i.peso_kg or 0) for i in itens_existentes)
+        peso_original = float(sublote.peso_liquido or sublote.peso_total_kg or 0)
+        peso_restante = peso_original - peso_ja_separado
+        
+        if peso_kg > peso_restante + 0.01:  # margem de arredondamento
+            return jsonify({'erro': f'Peso excede o disponível ({peso_restante:.3f} kg)'}), 400
+        
+        # Verificar classificação
+        classificacao = ClassificacaoGrade.query.get(classificacao_id)
+        if not classificacao:
+            return jsonify({'erro': 'Classificação não encontrada'}), 400
+        
+        current_user_id = get_jwt_identity()
+        
+        # Criar item separado
+        novo_item = ItemSeparadoProducao(
+            classificacao_grade_id=classificacao_id,
+            nome_item=nome_item,
+            peso_kg=peso_kg,
+            quantidade=1,
+            valor_estimado=round(preco_kg * peso_kg, 2),
+            custo_proporcional=round(preco_kg * peso_kg, 2),
+            separado_por_id=current_user_id,
+            data_separacao=datetime.utcnow(),
+            observacoes=observacoes,
+            entrada_estoque_id=sublote_id
+        )
+        db.session.add(novo_item)
+        
+        # Salvar nome do material para autocomplete futuro
+        # (Classificações de grade já servem este propósito)
+        
+        db.session.commit()
+        
+        # Recalcular restante
+        peso_ja_separado += peso_kg
+        novo_restante = peso_original - peso_ja_separado
+        
+        return jsonify({
+            'sucesso': True,
+            'item': novo_item.to_dict(),
+            'peso_separado_total': round(peso_ja_separado, 3),
+            'peso_restante': round(max(0, novo_restante), 3)
+        })
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f'Erro ao adicionar item separado: {str(e)}')
+        return jsonify({'erro': str(e)}), 500
+
+
+@bp.route('/producao/sublote/<int:sublote_id>/remover-item/<int:item_id>', methods=['DELETE'])
+@jwt_required()
+def remover_item_separado(sublote_id, item_id):
+    """Remove um item separado"""
+    try:
+        item = ItemSeparadoProducao.query.filter_by(
+            id=item_id,
+            entrada_estoque_id=sublote_id
+        ).first_or_404()
+        
+        db.session.delete(item)
+        db.session.commit()
+        
+        return jsonify({'sucesso': True, 'mensagem': 'Item removido'})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f'Erro ao remover item separado: {str(e)}')
+        return jsonify({'erro': str(e)}), 500
+
+
+@bp.route('/producao/sublote/<int:sublote_id>/devolver-estoque', methods=['POST'])
+@jwt_required()
+def devolver_sublote_estoque(sublote_id):
+    """Devolve material restante ao estoque e finaliza a produção do sublote"""
+    try:
+        sublote = Lote.query.get_or_404(sublote_id)
+        
+        # Calcular pesos
+        itens_separados = ItemSeparadoProducao.query.filter_by(
+            entrada_estoque_id=sublote_id
+        ).all()
+        peso_separado = sum(float(i.peso_kg or 0) for i in itens_separados)
+        peso_original = float(sublote.peso_liquido or sublote.peso_total_kg or 0)
+        peso_restante = peso_original - peso_separado
+        
+        if peso_separado <= 0:
+            # Nada foi separado, apenas devolver ao estoque
+            sublote.status = 'em_estoque'
+            sublote.reservado = False
+            sublote.reservado_para = None
+            sublote.reservado_por_id = None
+            sublote.reservado_em = None
+            db.session.commit()
+            return jsonify({
+                'sucesso': True,
+                'mensagem': 'Material devolvido ao estoque sem separação',
+                'peso_devolvido': round(peso_original, 3)
+            })
+        
+        if peso_restante > 0.01:
+            # Atualizar peso do sublote original com o que resta
+            sublote.peso_liquido = peso_restante
+            sublote.peso_total_kg = peso_restante
+            sublote.status = 'em_estoque'
+            sublote.reservado = False
+            sublote.reservado_para = None
+            sublote.reservado_por_id = None
+            sublote.reservado_em = None
+            
+            # Recalcular valor proporcional do que ficou
+            valor_total_original = float(sublote.valor_total or 0)
+            if valor_total_original > 0 and peso_original > 0:
+                sublote.valor_total = round((peso_restante / peso_original) * valor_total_original, 2)
+            
+            mensagem = f'Devolvido {peso_restante:.3f} kg ao estoque. {peso_separado:.3f} kg separado(s).'
+        else:
+            # Todo material foi separado - sublote "desaparece" (muda status)
+            sublote.status = 'processado'
+            sublote.reservado = False
+            sublote.reservado_para = None
+            sublote.reservado_por_id = None
+            sublote.reservado_em = None
+            sublote.peso_liquido = 0
+            sublote.peso_total_kg = 0
+            mensagem = f'Todo material ({peso_separado:.3f} kg) foi separado. Lote finalizado.'
+        
+        # Criar novos sublotes para itens separados (como novos materiais no estoque)
+        lote_pai = sublote.lote_pai or sublote
+        novos_sublotes = []
+        
+        for item in itens_separados:
+            # Gerar novo número de lote
+            ano = datetime.now().year
+            novo_numero = f"{ano}-{str(uuid.uuid4().hex[:5]).upper()}"
+            
+            novo_sublote = Lote(
+                numero_lote=novo_numero,
+                fornecedor_id=sublote.fornecedor_id,
+                tipo_lote_id=sublote.tipo_lote_id,
+                solicitacao_origem_id=sublote.solicitacao_origem_id or (lote_pai.solicitacao_origem_id if lote_pai != sublote else None),
+                oc_id=sublote.oc_id or (lote_pai.oc_id if lote_pai != sublote else None),
+                peso_bruto_recebido=float(item.peso_kg),
+                peso_liquido=float(item.peso_kg),
+                peso_total_kg=float(item.peso_kg),
+                valor_total=float(item.valor_estimado or 0),
+                quantidade_itens=1,
+                status='criado_separacao',
+                lote_pai_id=lote_pai.id,
+                observacoes=f"MATERIAL:{item.nome_item}|CLASSIFICACAO:{item.classificacao_grade.nome if item.classificacao_grade else 'N/A'}|PRECO_KG:{float(item.valor_estimado or 0) / float(item.peso_kg) if float(item.peso_kg) > 0 else 0:.2f}",
+                classificacao_predominante=item.classificacao_grade.categoria if item.classificacao_grade else None,
+                data_criacao=datetime.utcnow()
+            )
+            db.session.add(novo_sublote)
+            novos_sublotes.append(novo_sublote)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'sucesso': True,
+            'mensagem': mensagem,
+            'peso_devolvido': round(max(0, peso_restante), 3),
+            'peso_separado': round(peso_separado, 3),
+            'novos_sublotes': [{'id': s.id, 'numero_lote': s.numero_lote} for s in novos_sublotes]
+        })
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f'Erro ao devolver sublote {sublote_id} ao estoque: {str(e)}')
+        return jsonify({'erro': str(e)}), 500
+
+
+@bp.route('/producao/em-separacao', methods=['GET'])
+@jwt_required()
+def listar_em_separacao():
+    """Lista materiais em processo de separação (para admin panel)"""
+    try:
+        lotes_em_producao = Lote.query.options(
+            joinedload(Lote.tipo_lote),
+            joinedload(Lote.fornecedor),
+            joinedload(Lote.lote_pai)
+        ).filter(
+            Lote.status == 'em_producao'
+        ).order_by(Lote.reservado_em.desc()).all()
+        
+        resultado = []
+        for lote in lotes_em_producao:
+            peso_original = float(lote.peso_liquido or lote.peso_total_kg or 0)
+            
+            # Contar itens separados
+            itens = ItemSeparadoProducao.query.filter_by(
+                entrada_estoque_id=lote.id
+            ).all()
+            peso_separado = sum(float(i.peso_kg or 0) for i in itens)
+            
+            nome_material = 'Material'
+            if lote.observacoes:
+                if lote.observacoes.startswith('MATERIAL:'):
+                    nome_material = lote.observacoes.split('|')[0].replace('MATERIAL:', '').strip()
+                elif lote.observacoes.startswith('MATERIAL_MANUAL:'):
+                    nome_material = lote.observacoes.split('|')[0].replace('MATERIAL_MANUAL:', '').strip()
+            elif lote.tipo_lote:
+                nome_material = lote.tipo_lote.nome
+            
+            resultado.append({
+                'id': lote.id,
+                'numero_lote': lote.numero_lote,
+                'nome_material': nome_material,
+                'fornecedor_nome': lote.fornecedor.nome if lote.fornecedor else 'N/A',
+                'peso_original': round(peso_original, 2),
+                'peso_separado': round(peso_separado, 2),
+                'peso_restante': round(max(0, peso_original - peso_separado), 2),
+                'quantidade_itens': len(itens),
+                'status': lote.status,
+                'reservado_em': lote.reservado_em.isoformat() if lote.reservado_em else None,
+                'data_criacao': lote.data_criacao.isoformat() if lote.data_criacao else None
+            })
+        
+        return jsonify(resultado)
+    except Exception as e:
+        logger.error(f'Erro ao listar materiais em separação: {str(e)}')
+        return jsonify({'erro': str(e)}), 500
+
+
+@bp.route('/classificacoes/autocomplete', methods=['GET'])
+@jwt_required()
+def autocomplete_classificacoes():
+    """Lista classificações para autocomplete no modal de produção"""
+    try:
+        classificacoes = ClassificacaoGrade.query.filter_by(ativo=True).order_by(
+            ClassificacaoGrade.categoria,
+            ClassificacaoGrade.nome
+        ).all()
+        
+        return jsonify([{
+            'id': c.id,
+            'nome': c.nome,
+            'categoria': c.categoria,
+            'preco_estimado_kg': float(c.preco_estimado_kg) if c.preco_estimado_kg else 0
+        } for c in classificacoes])
+    except Exception as e:
+        logger.error(f'Erro ao listar classificações: {str(e)}')
+        return jsonify({'erro': str(e)}), 500
+
+
+# ============================
+# BAGS - Novo fluxo
+# ============================
+
+@bp.route('/bags/criar', methods=['POST'])
+@jwt_required()
+def criar_bag():
+    """Cria um novo bag"""
+    try:
+        data = request.get_json()
+        nome = data.get('nome', '').strip()
+        classificacao_id = data.get('classificacao_id')
+        
+        current_user_id = get_jwt_identity()
+        
+        # Se não informou classificação, usar a primeira HIGH_GRADE por padrão
+        if not classificacao_id:
+            classif = ClassificacaoGrade.query.filter_by(categoria='HIGH_GRADE', ativo=True).first()
+            if classif:
+                classificacao_id = classif.id
+            else:
+                classif = ClassificacaoGrade.query.filter_by(ativo=True).first()
+                classificacao_id = classif.id if classif else None
+        
+        if not classificacao_id:
+            return jsonify({'erro': 'Nenhuma classificação disponível'}), 400
+        
+        classif = ClassificacaoGrade.query.get(classificacao_id)
+        
+        # Gerar código
+        codigo = BagProducao.gerar_codigo_bag(nome or classif.nome)
+        
+        nova_bag = BagProducao(
+            codigo=codigo,
+            classificacao_grade_id=classificacao_id,
+            peso_acumulado=0,
+            quantidade_itens=0,
+            status='aberto',
+            criado_por_id=current_user_id,
+            categoria_manual=nome if nome else None,
+            data_criacao=datetime.utcnow()
+        )
+        db.session.add(nova_bag)
+        db.session.commit()
+        
+        return jsonify({
+            'sucesso': True,
+            'bag': nova_bag.to_dict()
+        })
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f'Erro ao criar bag: {str(e)}')
+        return jsonify({'erro': str(e)}), 500
+
+
+@bp.route('/bags/abertos', methods=['GET'])
+@jwt_required()
+def listar_bags_abertos():
+    """Lista bags abertos para seleção"""
+    try:
+        bags = BagProducao.query.options(
+            joinedload(BagProducao.classificacao_grade)
+        ).filter(
+            BagProducao.status == 'aberto'
+        ).order_by(BagProducao.data_criacao.desc()).all()
+        
+        return jsonify([{
+            'id': b.id,
+            'codigo': b.codigo,
+            'classificacao_nome': b.classificacao_grade.nome if b.classificacao_grade else 'N/A',
+            'categoria': b.classificacao_grade.categoria if b.classificacao_grade else 'N/A',
+            'peso_acumulado': float(b.peso_acumulado or 0),
+            'quantidade_itens': b.quantidade_itens or 0,
+            'categoria_manual': b.categoria_manual,
+            'data_criacao': b.data_criacao.isoformat() if b.data_criacao else None
+        } for b in bags])
+    except Exception as e:
+        logger.error(f'Erro ao listar bags abertos: {str(e)}')
+        return jsonify({'erro': str(e)}), 500
+
+
+@bp.route('/bags/adicionar-materiais', methods=['POST'])
+@jwt_required()
+def adicionar_materiais_bag():
+    """Adiciona materiais selecionados a um bag (com suporte a quantidades parciais)"""
+    try:
+        data = request.get_json()
+        bag_id = data.get('bag_id')
+        materiais = data.get('materiais', [])  # [{sublote_id, peso_enviar}]
+        
+        if not bag_id:
+            return jsonify({'erro': 'Bag não selecionado'}), 400
+        if not materiais:
+            return jsonify({'erro': 'Nenhum material selecionado'}), 400
+        
+        bag = BagProducao.query.get_or_404(bag_id)
+        
+        if bag.status != 'aberto':
+            return jsonify({'erro': 'Este bag está fechado e não aceita mais materiais'}), 400
+        
+        current_user_id = get_jwt_identity()
+        total_peso_adicionado = 0
+        total_itens_adicionados = 0
+        
+        for mat in materiais:
+            sublote_id = mat.get('sublote_id')
+            peso_enviar = float(mat.get('peso_enviar', 0))
+            
+            if not sublote_id or peso_enviar <= 0:
+                continue
+            
+            sublote = Lote.query.get(sublote_id)
+            if not sublote:
+                continue
+            
+            peso_atual = float(sublote.peso_liquido or sublote.peso_total_kg or 0)
+            
+            if peso_enviar > peso_atual + 0.01:
+                continue  # Skip if requested more than available
+            
+            # Extrair info do material
+            nome_material = 'Material'
+            preco_kg = 0
+            classificacao_categoria = None
+            
+            if sublote.observacoes:
+                partes = sublote.observacoes.split('|')
+                for parte in partes:
+                    if parte.startswith('MATERIAL:') or parte.startswith('MATERIAL_MANUAL:'):
+                        nome_material = parte.replace('MATERIAL_MANUAL:', '').replace('MATERIAL:', '').strip()
+                    elif parte.startswith('PRECO_KG:'):
+                        try:
+                            preco_kg = float(parte.replace('PRECO_KG:', '').strip())
+                        except:
+                            pass
+                    elif parte.startswith('CLASSIFICACAO:'):
+                        classificacao_categoria = parte.replace('CLASSIFICACAO:', '').strip()
+            elif sublote.tipo_lote:
+                nome_material = sublote.tipo_lote.nome
+            
+            # Calcular preço por kg se não veio das observações
+            if preco_kg <= 0:
+                valor_total_sublote = float(sublote.valor_total or 0)
+                if valor_total_sublote > 0 and peso_atual > 0:
+                    preco_kg = valor_total_sublote / peso_atual
+                else:
+                    # Tentar do lote pai
+                    if sublote.lote_pai:
+                        pai_val = float(sublote.lote_pai.valor_total or 0)
+                        pai_peso = float(sublote.lote_pai.peso_liquido or sublote.lote_pai.peso_total_kg or 1)
+                        if pai_val > 0 and pai_peso > 0:
+                            preco_kg = pai_val / pai_peso
+            
+            # Criar item no bag
+            novo_item = ItemSeparadoProducao(
+                classificacao_grade_id=bag.classificacao_grade_id,
+                nome_item=nome_material,
+                peso_kg=peso_enviar,
+                quantidade=1,
+                valor_estimado=round(preco_kg * peso_enviar, 2),
+                custo_proporcional=round(preco_kg * peso_enviar, 2),
+                separado_por_id=current_user_id,
+                data_separacao=datetime.utcnow(),
+                bag_id=bag_id,
+                entrada_estoque_id=sublote_id,
+                observacoes=f"Fornecedor: {sublote.fornecedor.nome if sublote.fornecedor else 'N/A'}"
+            )
+            db.session.add(novo_item)
+            
+            # Atualizar sublote
+            if abs(peso_enviar - peso_atual) < 0.01:
+                # Todo material enviado - sublote "desaparece"
+                sublote.status = 'processado'
+                sublote.peso_liquido = 0
+                sublote.peso_total_kg = 0
+            else:
+                # Parcial - reduzir peso
+                novo_peso = peso_atual - peso_enviar
+                sublote.peso_liquido = novo_peso
+                sublote.peso_total_kg = novo_peso
+                
+                # Recalcular valor proporcional
+                valor_total_original = float(sublote.valor_total or 0)
+                if valor_total_original > 0 and peso_atual > 0:
+                    sublote.valor_total = round((novo_peso / peso_atual) * valor_total_original, 2)
+            
+            total_peso_adicionado += peso_enviar
+            total_itens_adicionados += 1
+        
+        # Atualizar bag
+        bag.peso_acumulado = float(bag.peso_acumulado or 0) + total_peso_adicionado
+        bag.quantidade_itens = (bag.quantidade_itens or 0) + total_itens_adicionados
+        bag.data_atualizacao = datetime.utcnow()
+        
+        db.session.commit()
+        
+        return jsonify({
+            'sucesso': True,
+            'mensagem': f'{total_itens_adicionados} material(is) adicionado(s) ao bag',
+            'peso_adicionado': round(total_peso_adicionado, 3),
+            'bag': bag.to_dict()
+        })
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f'Erro ao adicionar materiais ao bag: {str(e)}')
+        return jsonify({'erro': str(e)}), 500
+
+
+@bp.route('/bags/<int:bag_id>/fechar', methods=['POST'])
+@jwt_required()
+def fechar_bag(bag_id):
+    """Fecha um bag (não aceita mais adições)"""
+    try:
+        bag = BagProducao.query.get_or_404(bag_id)
+        
+        if bag.status != 'aberto':
+            return jsonify({'erro': 'Bag já está fechado'}), 400
+        
+        bag.status = 'cheio'
+        bag.data_atualizacao = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({'sucesso': True, 'mensagem': 'Bag fechado com sucesso', 'bag': bag.to_dict()})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f'Erro ao fechar bag {bag_id}: {str(e)}')
+        return jsonify({'erro': str(e)}), 500
+
+
+@bp.route('/bags/<int:bag_id>/detalhes', methods=['GET'])
+@jwt_required()
+def detalhes_bag(bag_id):
+    """Detalhes completos do bag com cálculo de valor médio"""
+    try:
+        bag = BagProducao.query.options(
+            joinedload(BagProducao.classificacao_grade),
+            joinedload(BagProducao.criado_por)
+        ).get_or_404(bag_id)
+        
+        # Buscar todos itens do bag
+        itens = ItemSeparadoProducao.query.options(
+            joinedload(ItemSeparadoProducao.classificacao_grade)
+        ).filter_by(bag_id=bag_id).all()
+        
+        materiais = []
+        total_peso = 0
+        total_valor = 0
+        
+        for item in itens:
+            peso = float(item.peso_kg or 0)
+            valor = float(item.valor_estimado or item.custo_proporcional or 0)
+            preco_kg = round(valor / peso, 2) if peso > 0 else 0
+            
+            materiais.append({
+                'id': item.id,
+                'nome': item.nome_item,
+                'peso_kg': round(peso, 3),
+                'preco_kg': preco_kg,
+                'valor_total': round(valor, 2),
+                'classificacao': item.classificacao_grade.nome if item.classificacao_grade else 'N/A',
+                'categoria': item.classificacao_grade.categoria if item.classificacao_grade else 'N/A',
+                'fornecedor': item.observacoes.replace('Fornecedor: ', '') if item.observacoes and item.observacoes.startswith('Fornecedor:') else 'N/A',
+                'data': item.data_separacao.isoformat() if item.data_separacao else None
+            })
+            
+            total_peso += peso
+            total_valor += valor
+        
+        media_preco_kg = round(total_valor / total_peso, 2) if total_peso > 0 else 0
+        
+        bag_dict = bag.to_dict()
+        bag_dict['materiais'] = materiais
+        bag_dict['total_peso'] = round(total_peso, 3)
+        bag_dict['total_valor'] = round(total_valor, 2)
+        bag_dict['media_preco_kg'] = media_preco_kg
+        bag_dict['total_materiais'] = len(materiais)
+        
+        return jsonify(bag_dict)
+    except Exception as e:
+        logger.error(f'Erro ao obter detalhes do bag {bag_id}: {str(e)}')
+        return jsonify({'erro': str(e)}), 500
+
 
