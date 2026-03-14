@@ -14,6 +14,141 @@ bp = Blueprint('estoque_ativo', __name__, url_prefix='/api/estoque-ativo')
 # Status de lotes ativos (incluindo sublotes criados na separação)
 LOTES_ATIVOS_STATUS = ['em_estoque', 'disponivel', 'aprovado', 'em_producao', 'CRIADO_SEPARACAO', 'PROCESSADO', 'criado_separacao', 'processado']
 
+
+def _calcular_preco_kg_sublote(sublote):
+    """Calcula o preço por kg de um sublote seguindo a cadeia de prioridades:
+    1. Observações do sublote (PRECO_KG:)
+    2. valor_total / peso do sublote
+    3. valor_total / peso do lote pai
+    4. Pedido de Compra aprovado (OrdemCompra) → ItemSolicitacao.preco_por_kg_snapshot
+       por tipo_lote_id específico do material
+    5. Fallback: todos os itens da OC (média geral)
+    """
+    if not sublote:
+        return 0
+    
+    peso_atual = float(sublote.peso_liquido or sublote.peso_total_kg or 0)
+    
+    # Prioridade 1: PRECO_KG nas observações
+    if sublote.observacoes:
+        for parte in sublote.observacoes.split('|'):
+            if parte.strip().startswith('PRECO_KG:'):
+                try:
+                    preco = float(parte.replace('PRECO_KG:', '').strip())
+                    if preco > 0:
+                        return preco
+                except:
+                    pass
+    
+    # Prioridade 2: valor_total do sublote / peso
+    val_sublote = float(sublote.valor_total or 0)
+    if val_sublote > 0 and peso_atual > 0:
+        return val_sublote / peso_atual
+    
+    # Prioridade 3: valor_total do lote pai / peso do pai  
+    lote_pai = sublote.lote_pai if sublote.lote_pai_id else None
+    if lote_pai:
+        pai_val = float(lote_pai.valor_total or 0)
+        pai_peso = float(lote_pai.peso_liquido or lote_pai.peso_total_kg or 0)
+        if pai_val > 0 and pai_peso > 0:
+            return pai_val / pai_peso
+    
+    # Prioridade 4: Buscar no Pedido de Compra Aprovado (OrdemCompra → ItemSolicitacao)
+    # Encontrar a solicitação de origem (OC) do lote
+    solicitacao_id = None
+    if lote_pai and lote_pai.solicitacao_origem_id:
+        solicitacao_id = lote_pai.solicitacao_origem_id
+    elif sublote.solicitacao_origem_id:
+        solicitacao_id = sublote.solicitacao_origem_id
+    
+    if solicitacao_id:
+        # Verificar se existe um Pedido de Compra aprovado para esta Solicitação
+        oc_aprovada = OrdemCompra.query.filter_by(
+            solicitacao_id=solicitacao_id
+        ).filter(
+            OrdemCompra.status.in_(['aprovada', 'aprovada_adm', 'concluido', 'APROVADA', 'APROVADA_ADM', 'concluida', 'em_conferencia', 'conferida', 'conferido'])
+        ).first()
+        
+        # Se não encontrou com status aprovado, pegar qualquer OC desta solicitação
+        if not oc_aprovada:
+            oc_aprovada = OrdemCompra.query.filter_by(
+                solicitacao_id=solicitacao_id
+            ).first()
+        
+        if oc_aprovada:
+            # Buscar itens da solicitação vinculada ao pedido de compra aprovado
+            tipo_lote_id = sublote.tipo_lote_id
+            
+            # Prioridade 4a: Buscar item específico por tipo_lote_id
+            if tipo_lote_id:
+                itens_especificos = ItemSolicitacao.query.filter_by(
+                    solicitacao_id=solicitacao_id,
+                    tipo_lote_id=tipo_lote_id
+                ).all()
+                if itens_especificos:
+                    # Usar preco_por_kg_snapshot (preço aprovado no pedido de compra)
+                    for item in itens_especificos:
+                        preco_snap = float(item.preco_por_kg_snapshot or 0)
+                        if preco_snap > 0:
+                            return preco_snap
+                    # Fallback: calcular do valor_calculado
+                    total_val = sum(float(i.valor_calculado or 0) for i in itens_especificos)
+                    total_peso = sum(float(i.peso_kg or 0) for i in itens_especificos)
+                    if total_peso > 0 and total_val > 0:
+                        return total_val / total_peso
+            
+            # Prioridade 4b: Tentar buscar por material_id via nome do material
+            nome_material = None
+            if sublote.observacoes:
+                for parte in sublote.observacoes.split('|'):
+                    p = parte.strip()
+                    if p.startswith('MATERIAL:') or p.startswith('MATERIAL_MANUAL:'):
+                        nome_material = p.replace('MATERIAL_MANUAL:', '').replace('MATERIAL:', '').strip()
+                        break
+            elif sublote.tipo_lote:
+                nome_material = sublote.tipo_lote.nome
+            
+            if nome_material:
+                # Buscar material base pelo nome
+                material_base = MaterialBase.query.filter(
+                    func.lower(MaterialBase.nome) == func.lower(nome_material)
+                ).first()
+                if material_base:
+                    item_especifico = ItemSolicitacao.query.filter_by(
+                        solicitacao_id=solicitacao_id,
+                        material_id=material_base.id
+                    ).first()
+                    if item_especifico:
+                        preco_snap = float(item_especifico.preco_por_kg_snapshot or 0)
+                        if preco_snap > 0:
+                            return preco_snap
+                        val_calc = float(item_especifico.valor_calculado or 0)
+                        peso_item = float(item_especifico.peso_kg or 0)
+                        if val_calc > 0 and peso_item > 0:
+                            return val_calc / peso_item
+            
+            # Prioridade 5: Média geral de todos os itens do pedido de compra
+            itens_todos = ItemSolicitacao.query.filter_by(
+                solicitacao_id=solicitacao_id
+            ).all()
+            if itens_todos:
+                # Tentar usar preco_por_kg_snapshot primeiro
+                precos_snap = [float(i.preco_por_kg_snapshot or 0) for i in itens_todos if float(i.preco_por_kg_snapshot or 0) > 0]
+                if precos_snap:
+                    # Média ponderada por peso
+                    total_val = sum(float(i.preco_por_kg_snapshot or 0) * float(i.peso_kg or 0) for i in itens_todos if float(i.preco_por_kg_snapshot or 0) > 0)
+                    total_peso = sum(float(i.peso_kg or 0) for i in itens_todos if float(i.preco_por_kg_snapshot or 0) > 0)
+                    if total_peso > 0:
+                        return total_val / total_peso
+                
+                # Fallback: valor_calculado
+                total_val = sum(float(i.valor_calculado or 0) for i in itens_todos)
+                total_peso = sum(float(i.peso_kg or 0) for i in itens_todos)
+                if total_peso > 0 and total_val > 0:
+                    return total_val / total_peso
+    
+    return 0
+
 @bp.route('/dashboard', methods=['GET'])
 @jwt_required()
 def dashboard_estoque_ativo():
@@ -1098,16 +1233,7 @@ def adicionar_materiais_bag():
             
             # Calcular preço por kg se não veio das observações
             if preco_kg <= 0:
-                valor_total_sublote = float(sublote.valor_total or 0)
-                if valor_total_sublote > 0 and peso_atual > 0:
-                    preco_kg = valor_total_sublote / peso_atual
-                else:
-                    # Tentar do lote pai
-                    if sublote.lote_pai:
-                        pai_val = float(sublote.lote_pai.valor_total or 0)
-                        pai_peso = float(sublote.lote_pai.peso_liquido or sublote.lote_pai.peso_total_kg or 1)
-                        if pai_val > 0 and pai_peso > 0:
-                            preco_kg = pai_val / pai_peso
+                preco_kg = _calcular_preco_kg_sublote(sublote)
             
             # Criar item no bag
             novo_item = ItemSeparadoProducao(
@@ -1206,8 +1332,22 @@ def detalhes_bag(bag_id):
         
         for item in itens:
             peso = float(item.peso_kg or 0)
-            # Usar valor já salvo no item (calculado corretamente quando adicionado ao bag)
+            # Usar valor já salvo no item (calculado quando adicionado ao bag)
             valor = float(item.valor_estimado or item.custo_proporcional or 0)
+            
+            # Se valor é zero, recalcular dinamicamente a partir do sublote de origem
+            if valor <= 0 and peso > 0 and item.entrada_estoque_id:
+                sublote_origem = Lote.query.options(
+                    joinedload(Lote.lote_pai)
+                ).get(item.entrada_estoque_id)
+                if sublote_origem:
+                    preco_encontrado = _calcular_preco_kg_sublote(sublote_origem)
+                    if preco_encontrado > 0:
+                        valor = round(preco_encontrado * peso, 2)
+                        # Atualizar no banco para não precisar recalcular na próxima vez
+                        item.valor_estimado = valor
+                        item.custo_proporcional = valor
+            
             preco_kg = round(valor / peso, 2) if peso > 0 else 0
             
             # Buscar fornecedor do lote de origem
@@ -1241,6 +1381,12 @@ def detalhes_bag(bag_id):
             
             total_peso += peso
             total_valor += valor
+        
+        # Salvar atualizações de valor (se algum foi recalculado)
+        try:
+            db.session.commit()
+        except:
+            db.session.rollback()
         
         media_preco_kg = round(total_valor / total_peso, 2) if total_peso > 0 else 0
         
