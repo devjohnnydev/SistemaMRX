@@ -446,6 +446,17 @@
         let modoSelecao = false;
         let materiaisSelecionados = new Set();
 
+        // Bridge function: showNotification -> showAlert/showSuccess from utils.js
+        function showNotification(msg, type) {
+            if (type === 'error') showAlert(msg);
+            else showSuccess(msg);
+        }
+
+        // Guard against duplicate button clicks
+        let _actionInProgress = {};
+        function isActionBusy(key) { return !!_actionInProgress[key]; }
+        function setActionBusy(key, busy) { _actionInProgress[key] = busy; }
+
         let isAdminOrGestor = false;
 
         async function carregarPagina() {
@@ -1440,7 +1451,11 @@
         let dadosSublotesCache = {};
 
         async function enviarParaProducao(subloteId) {
+            if (isActionBusy('enviarProducao_' + subloteId)) return;
             if (!confirm('Enviar este material para produção? Ele ficará reservado.')) return;
+            setActionBusy('enviarProducao_' + subloteId, true);
+            const btn = event && event.target ? event.target.closest('button') : null;
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...'; }
             try {
                 const resp = await fetchAPI('/estoque-ativo/producao/enviar', {
                     method: 'POST',
@@ -1457,6 +1472,7 @@
                     showNotification(data.erro || 'Erro ao enviar', 'error');
                 }
             } catch(e) { showNotification('Erro de conexão', 'error'); }
+            finally { setActionBusy('enviarProducao_' + subloteId, false); if (btn) { btn.disabled = false; } }
         }
 
         async function abrirModalProducaoItem(subloteId) {
@@ -1476,7 +1492,25 @@
         }
 
         function renderizarModalProducao(det, classificacoes) {
-            const classifOptions = classificacoes.map(c => `<option value="${c.id}">${c.nome} (${c.categoria})</option>`).join('');
+            // Fixed 4 categories: show only one per main category (HIGH, LOW, MG1, MG2)
+            const categoriasFixas = ['HIGH_GRADE', 'LOW_GRADE', 'MG1', 'MG2'];
+            const categoriasLabels = {'HIGH_GRADE': 'High Grade', 'LOW_GRADE': 'Low Grade', 'MG1': 'MG1', 'MG2': 'MG2'};
+            const classifFiltradas = [];
+            const categoriasVistas = new Set();
+            for (const c of classificacoes) {
+                const cat = (c.categoria || '').toUpperCase();
+                // Normalizar variações
+                let catNorm = cat;
+                if (cat === 'HIGH' || cat === 'HIGH_GRADE') catNorm = 'HIGH_GRADE';
+                else if (cat === 'LOW' || cat === 'LOW_GRADE') catNorm = 'LOW_GRADE';
+                else if (cat === 'MG1' || cat === 'MID_GRADE' || cat === 'MID_GRADE_1') catNorm = 'MG1';
+                else if (cat === 'MG2' || cat === 'MID_GRADE_2') catNorm = 'MG2';
+                if (categoriasFixas.includes(catNorm) && !categoriasVistas.has(catNorm)) {
+                    categoriasVistas.add(catNorm);
+                    classifFiltradas.push({id: c.id, label: categoriasLabels[catNorm] || c.nome});
+                }
+            }
+            const classifOptions = classifFiltradas.map(c => `<option value="${c.id}">${c.label}</option>`).join('');
             const itensHtml = det.itens_separados.map(item => `
                 <div class="separado-card">
                     <div>
@@ -1517,13 +1551,13 @@
                             </select>
                             <input type="number" id="prodPrecoItem" placeholder="Preço R$/kg" step="0.01" style="flex:1;padding:0.6rem;border:1px solid var(--gray-300);border-radius:8px;font-size:0.9rem;">
                         </div>
-                        <button onclick="adicionarItemSeparado(${det.sublote_id})" class="btn" style="background:#059669;color:white;padding:0.75rem;border-radius:8px;font-size:1rem;font-weight:bold;">
-                            <i class="fas fa-plus"></i> Adicionar Material
+                        <button id="btnAdicionarItem" onclick="adicionarItemSeparado(${det.sublote_id})" class="btn" style="background:#059669;color:white;padding:0.75rem;border-radius:8px;font-size:1rem;font-weight:bold;">
+                            <i class="fas fa-plus"></i> +Adicionar Material
                         </button>
                     </div>
                 </div>` : ''}
                 <div style="display:flex;gap:0.75rem;margin-top:1.5rem;">
-                    <button onclick="devolverEstoque(${det.sublote_id})" class="btn" style="flex:1;background:#0891b2;color:white;padding:0.75rem;border-radius:10px;font-size:1rem;font-weight:bold;">
+                    <button id="btnDevolverEstoque" onclick="devolverEstoque(${det.sublote_id})" class="btn" style="flex:1;background:#0891b2;color:white;padding:0.75rem;border-radius:10px;font-size:1rem;font-weight:bold;">
                         <i class="fas fa-undo"></i> Devolver ao Estoque / Finalizar
                     </button>
                 </div>
@@ -1531,11 +1565,15 @@
         }
 
         async function adicionarItemSeparado(subloteId) {
+            if (isActionBusy('adicionar_' + subloteId)) return;
             const nome = document.getElementById('prodNomeItem').value.trim();
             const peso = parseFloat(document.getElementById('prodPesoItem').value);
             const classifId = document.getElementById('prodClassifItem').value;
             const preco = parseFloat(document.getElementById('prodPrecoItem').value) || 0;
             if (!nome || !peso || !classifId) { showNotification('Preencha nome, peso e classificação', 'error'); return; }
+            setActionBusy('adicionar_' + subloteId, true);
+            const btn = document.getElementById('btnAdicionarItem');
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adicionando...'; }
             try {
                 const resp = await fetchAPI(`/estoque-ativo/producao/sublote/${subloteId}/adicionar-item`, {
                     method: 'POST',
@@ -1548,10 +1586,13 @@
                     abrirModalProducaoItem(subloteId);
                 } else { showNotification(data.erro || 'Erro', 'error'); }
             } catch(e) { showNotification('Erro de conexão', 'error'); }
+            finally { setActionBusy('adicionar_' + subloteId, false); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-plus"></i> +Adicionar Material'; } }
         }
 
         async function removerItemSeparado(subloteId, itemId) {
+            if (isActionBusy('remover_' + itemId)) return;
             if (!confirm('Remover este item separado?')) return;
+            setActionBusy('remover_' + itemId, true);
             try {
                 const resp = await fetchAPI(`/estoque-ativo/producao/sublote/${subloteId}/remover-item/${itemId}`, {method: 'DELETE'});
                 const data = await resp.json();
@@ -1560,10 +1601,15 @@
                     abrirModalProducaoItem(subloteId);
                 } else { showNotification(data.erro || 'Erro', 'error'); }
             } catch(e) { showNotification('Erro', 'error'); }
+            finally { setActionBusy('remover_' + itemId, false); }
         }
 
         async function devolverEstoque(subloteId) {
+            if (isActionBusy('devolver_' + subloteId)) return;
             if (!confirm('Finalizar produção e devolver material restante ao estoque?')) return;
+            setActionBusy('devolver_' + subloteId, true);
+            const btn = document.getElementById('btnDevolverEstoque');
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...'; }
             try {
                 const resp = await fetchAPI(`/estoque-ativo/producao/sublote/${subloteId}/devolver-estoque`, {
                     method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'
@@ -1576,6 +1622,7 @@
                     await carregarDashboardEstoque();
                 } else { showNotification(data.erro || 'Erro', 'error'); }
             } catch(e) { showNotification('Erro', 'error'); }
+            finally { setActionBusy('devolver_' + subloteId, false); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-undo"></i> Devolver ao Estoque / Finalizar'; } }
         }
 
         function fecharModalProducao() {
@@ -1662,13 +1709,17 @@
                 </div>
                 <h4 style="margin:0 0 0.75rem;"><i class="fas fa-list"></i> Materiais Selecionados (${matIds.length})</h4>
                 <div style="max-height:300px;overflow-y:auto;">${matHtml}</div>
-                <button onclick="enviarMaterialParaBag()" class="btn" style="width:100%;margin-top:1.5rem;background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:white;padding:1rem;border-radius:12px;font-size:1.1rem;font-weight:bold;">
+                <button id="btnEnviarBag" onclick="enviarMaterialParaBag()" class="btn" style="width:100%;margin-top:1.5rem;background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:white;padding:1rem;border-radius:12px;font-size:1.1rem;font-weight:bold;">
                     <i class="fas fa-paper-plane"></i> Enviar para Bag
                 </button>
             `;
         }
 
         async function enviarMaterialParaBag() {
+            if (isActionBusy('enviarBag')) return;
+            setActionBusy('enviarBag', true);
+            const btn = document.getElementById('btnEnviarBag');
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...'; }
             const selectBag = document.getElementById('selectBagExistente').value;
             let bagId = selectBag;
             if (selectBag === 'novo') {
@@ -1679,9 +1730,9 @@
                         body: JSON.stringify({nome: nome})
                     });
                     const data = await resp.json();
-                    if (!data.sucesso) { showNotification(data.erro || 'Erro ao criar bag', 'error'); return; }
+                    if (!data.sucesso) { showNotification(data.erro || 'Erro ao criar bag', 'error'); setActionBusy('enviarBag', false); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar para Bag'; } return; }
                     bagId = data.bag.id;
-                } catch(e) { showNotification('Erro ao criar bag', 'error'); return; }
+                } catch(e) { showNotification('Erro ao criar bag', 'error'); setActionBusy('enviarBag', false); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar para Bag'; } return; }
             }
             const materiais = Array.from(materiaisSelecionados).map(id => {
                 const pesoInput = document.getElementById(`bagPeso_${id}`);
@@ -1699,8 +1750,10 @@
                     toggleModoSelecao();
                     await carregarLotesAtivos();
                     await carregarDashboardEstoque();
+                    await carregarBagsEstoque();
                 } else { showNotification(data.erro || 'Erro', 'error'); }
             } catch(e) { showNotification('Erro ao enviar para bag', 'error'); }
+            finally { setActionBusy('enviarBag', false); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar para Bag'; } }
         }
 
         function fecharModalBag() { document.getElementById('modalBag').classList.remove('active'); }
@@ -1709,7 +1762,9 @@
         // BAGS - Fechar e Ver
         // ============================
         async function fecharBagAction(bagId) {
+            if (isActionBusy('fecharBag_' + bagId)) return;
             if (!confirm('Fechar este bag? Não será possível adicionar mais materiais.')) return;
+            setActionBusy('fecharBag_' + bagId, true);
             try {
                 const resp = await fetchAPI(`/estoque-ativo/bags/${bagId}/fechar`, {method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}'});
                 const data = await resp.json();
@@ -1718,6 +1773,7 @@
                     await carregarBagsEstoque();
                 } else { showNotification(data.erro, 'error'); }
             } catch(e) { showNotification('Erro', 'error'); }
+            finally { setActionBusy('fecharBag_' + bagId, false); }
         }
 
         async function abrirVerBag(bagId) {
