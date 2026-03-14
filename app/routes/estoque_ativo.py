@@ -916,6 +916,29 @@ def listar_em_separacao():
 def autocomplete_classificacoes():
     """Lista classificações para autocomplete no modal de produção"""
     try:
+        # Garantir que as 4 categorias fixas existam
+        categorias_obrigatorias = [
+            {'nome': 'High Grade', 'categoria': 'HIGH_GRADE'},
+            {'nome': 'Low Grade', 'categoria': 'LOW_GRADE'},
+            {'nome': 'MG1', 'categoria': 'MG1'},
+            {'nome': 'MG2', 'categoria': 'MG2'},
+        ]
+        
+        for cat_info in categorias_obrigatorias:
+            existe = ClassificacaoGrade.query.filter_by(
+                categoria=cat_info['categoria'], ativo=True
+            ).first()
+            if not existe:
+                nova = ClassificacaoGrade(
+                    nome=cat_info['nome'],
+                    categoria=cat_info['categoria'],
+                    ativo=True,
+                    data_cadastro=datetime.utcnow()
+                )
+                db.session.add(nova)
+        
+        db.session.commit()
+        
         classificacoes = ClassificacaoGrade.query.filter_by(ativo=True).order_by(
             ClassificacaoGrade.categoria,
             ClassificacaoGrade.nome
@@ -928,6 +951,7 @@ def autocomplete_classificacoes():
             'preco_estimado_kg': float(c.preco_estimado_kg) if c.preco_estimado_kg else 0
         } for c in classificacoes])
     except Exception as e:
+        db.session.rollback()
         logger.error(f'Erro ao listar classificações: {str(e)}')
         return jsonify({'erro': str(e)}), 500
 
@@ -1182,69 +1206,33 @@ def detalhes_bag(bag_id):
         
         for item in itens:
             peso = float(item.peso_kg or 0)
+            # Usar valor já salvo no item (calculado corretamente quando adicionado ao bag)
+            valor = float(item.valor_estimado or item.custo_proporcional or 0)
+            preco_kg = round(valor / peso, 2) if peso > 0 else 0
             
-            # Buscar preço real do fornecedor via OC (sublote pai)
-            preco_kg_real = 0
+            # Buscar fornecedor do lote de origem
             fornecedor_nome = 'N/A'
-            
-            # Tentar buscar do sublote de entrada (lote de origem)
             if item.entrada_estoque_id:
                 sublote_origem = Lote.query.options(
                     joinedload(Lote.fornecedor),
                     joinedload(Lote.lote_pai)
                 ).get(item.entrada_estoque_id)
-                
                 if sublote_origem:
-                    # Fornecedor
                     if sublote_origem.fornecedor:
                         fornecedor_nome = sublote_origem.fornecedor.nome
                     elif sublote_origem.lote_pai and sublote_origem.lote_pai.fornecedor:
                         fornecedor_nome = sublote_origem.lote_pai.fornecedor.nome
-                    
-                    # Preço da OC - do valor_total do sublote
-                    val_sublote = float(sublote_origem.valor_total or 0)
-                    peso_sublote = float(sublote_origem.peso_liquido or sublote_origem.peso_total_kg or 0)
-                    if val_sublote > 0 and peso_sublote > 0:
-                        preco_kg_real = val_sublote / peso_sublote
-                    elif sublote_origem.lote_pai:
-                        # Tentar do lote pai
-                        val_pai = float(sublote_origem.lote_pai.valor_total or 0)
-                        peso_pai = float(sublote_origem.lote_pai.peso_liquido or sublote_origem.lote_pai.peso_total_kg or 1)
-                        if val_pai > 0 and peso_pai > 0:
-                            preco_kg_real = val_pai / peso_pai
-                    
-                    # Se ainda não achou, tentar da solicitação (OC) do lote pai
-                    if preco_kg_real <= 0:
-                        lote_ref = sublote_origem.lote_pai or sublote_origem
-                        if lote_ref.solicitacao_origem_id:
-                            itens_solic = ItemSolicitacao.query.filter_by(
-                                solicitacao_id=lote_ref.solicitacao_origem_id
-                            ).all()
-                            if itens_solic:
-                                total_val = sum(float(i.valor_calculado or 0) for i in itens_solic)
-                                total_peso = sum(float(i.peso_kg or 0) for i in itens_solic)
-                                if total_peso > 0:
-                                    preco_kg_real = total_val / total_peso
             
-            # Fallback: usar observações do item para fornecedor se não encontrou pelo lote
+            # Fallback: observações do item
             if fornecedor_nome == 'N/A' and item.observacoes and item.observacoes.startswith('Fornecedor:'):
                 fornecedor_nome = item.observacoes.replace('Fornecedor: ', '')
-            
-            # Usar preço real da OC se disponível, senão fallback para valor_estimado
-            if preco_kg_real > 0:
-                valor_total = round(preco_kg_real * peso, 2)
-            else:
-                preco_kg_real = 0
-                valor_total = float(item.valor_estimado or item.custo_proporcional or 0)
-                if peso > 0 and valor_total > 0:
-                    preco_kg_real = round(valor_total / peso, 2)
             
             materiais.append({
                 'id': item.id,
                 'nome': item.nome_item,
                 'peso_kg': round(peso, 3),
-                'preco_kg': round(preco_kg_real, 2),
-                'valor_total': round(valor_total, 2),
+                'preco_kg': preco_kg,
+                'valor_total': round(valor, 2),
                 'classificacao': item.classificacao_grade.nome if item.classificacao_grade else 'N/A',
                 'categoria': item.classificacao_grade.categoria if item.classificacao_grade else 'N/A',
                 'fornecedor': fornecedor_nome,
@@ -1252,7 +1240,7 @@ def detalhes_bag(bag_id):
             })
             
             total_peso += peso
-            total_valor += valor_total
+            total_valor += valor
         
         media_preco_kg = round(total_valor / total_peso, 2) if total_peso > 0 else 0
         
