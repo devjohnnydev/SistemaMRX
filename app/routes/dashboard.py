@@ -23,30 +23,65 @@ def obter_estatisticas():
         Lote.status == 'aprovado'
     ).scalar() or 0
     
-    # Quilos por tipo de lote
-    quilos_low = db.session.query(func.sum(Lote.peso_total_kg)).join(
-        TipoLote, Lote.tipo_lote_id == TipoLote.id
-    ).filter(
-        TipoLote.classificacao == 'low'
-    ).scalar() or 0
+    from app.models import BagProducao, ClassificacaoGrade
     
-    quilos_mg1 = db.session.query(func.sum(Lote.peso_total_kg)).join(
-        TipoLote, Lote.tipo_lote_id == TipoLote.id
-    ).filter(
-        TipoLote.classificacao == 'mg1'
-    ).scalar() or 0
+    LOTES_ATIVOS_STATUS = ['em_estoque', 'disponivel', 'aprovado', 'em_producao', 'CRIADO_SEPARACAO', 'PROCESSADO', 'criado_separacao', 'processado']
+    BAGS_ATIVOS_STATUS = ['devolvido_estoque', 'cheio', 'aberto', 'enviado_refinaria']
+
+    def obter_peso_e_qtd_por_classificacao(lote_classif, bag_conditions):
+        peso_lotes = db.session.query(func.sum(func.coalesce(Lote.peso_liquido, Lote.peso_total_kg))).join(
+            TipoLote, Lote.tipo_lote_id == TipoLote.id
+        ).filter(
+            TipoLote.classificacao == lote_classif,
+            Lote.status.in_(LOTES_ATIVOS_STATUS),
+            Lote.bloqueado == False
+        ).scalar() or 0
+        
+        qtd_lotes = db.session.query(func.count(Lote.id)).join(
+            TipoLote, Lote.tipo_lote_id == TipoLote.id
+        ).filter(
+            TipoLote.classificacao == lote_classif,
+            Lote.status.in_(LOTES_ATIVOS_STATUS),
+            Lote.bloqueado == False,
+            func.coalesce(Lote.peso_liquido, Lote.peso_total_kg) > 0
+        ).scalar() or 0
+
+        peso_bags = db.session.query(func.sum(BagProducao.peso_acumulado)).join(
+            ClassificacaoGrade, BagProducao.classificacao_grade_id == ClassificacaoGrade.id
+        ).filter(
+            bag_conditions,
+            BagProducao.status.in_(BAGS_ATIVOS_STATUS)
+        ).scalar() or 0
+        
+        qtd_bags = db.session.query(func.count(BagProducao.id)).join(
+            ClassificacaoGrade, BagProducao.classificacao_grade_id == ClassificacaoGrade.id
+        ).filter(
+            bag_conditions,
+            BagProducao.status.in_(BAGS_ATIVOS_STATUS)
+        ).scalar() or 0
+        
+        return float(peso_lotes) + float(peso_bags), qtd_lotes + qtd_bags
+
+    quilos_low, qtd_low = obter_peso_e_qtd_por_classificacao(
+        'low', func.lower(ClassificacaoGrade.categoria).like('%low%')
+    )
     
-    quilos_mg2 = db.session.query(func.sum(Lote.peso_total_kg)).join(
-        TipoLote, Lote.tipo_lote_id == TipoLote.id
-    ).filter(
-        TipoLote.classificacao == 'mg2'
-    ).scalar() or 0
+    quilos_mg1, qtd_mg1 = obter_peso_e_qtd_por_classificacao(
+        'mg1', 
+        (func.lower(ClassificacaoGrade.categoria) == 'mg1') | 
+        (func.lower(ClassificacaoGrade.categoria).like('%mid_grade_1%')) |
+        (func.lower(ClassificacaoGrade.categoria).like('%mid_grade%'))
+    )
     
-    quilos_high = db.session.query(func.sum(Lote.peso_total_kg)).join(
-        TipoLote, Lote.tipo_lote_id == TipoLote.id
-    ).filter(
-        TipoLote.classificacao == 'high'
-    ).scalar() or 0
+    quilos_mg2, qtd_mg2 = obter_peso_e_qtd_por_classificacao(
+        'mg2',
+        (func.lower(ClassificacaoGrade.categoria) == 'mg2') | 
+        (func.lower(ClassificacaoGrade.categoria).like('%mid_grade_2%'))
+    )
+
+    quilos_high, qtd_high = obter_peso_e_qtd_por_classificacao(
+        'high', func.lower(ClassificacaoGrade.categoria).like('%high%')
+    )
     
     # Ranking de fornecedores (top 10)
     ranking = db.session.query(
@@ -76,6 +111,12 @@ def obter_estatisticas():
             'pendentes': total_pendentes,
             'aprovados': total_aprovados,
             'reprovados': total_reprovados
+        },
+        'estoque_ativo_qtd': {
+            'low': qtd_low,
+            'mg1': qtd_mg1,
+            'mg2': qtd_mg2,
+            'high': qtd_high
         },
         'valor_total': float(valor_total),
         'quilos_por_tipo': {

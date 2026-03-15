@@ -632,12 +632,12 @@
                         activeCharts['chart1'].destroy();
                     }
                     activeCharts['chart1'] = new Chart(ctx1, {
-                        type: 'bar',
+                        type: 'doughnut',
                         data: {
                             labels: ['Low', 'MG1', 'MG2', 'High'],
                             datasets: [{
-                                label: 'Peso (kg)',
-                                data: [dashboardData.quilos_por_tipo.low, dashboardData.quilos_por_tipo.mg1, dashboardData.quilos_por_tipo.mg2, dashboardData.quilos_por_tipo.high],
+                                label: 'Quantidade',
+                                data: [dashboardData.estoque_ativo_qtd.low, dashboardData.estoque_ativo_qtd.mg1, dashboardData.estoque_ativo_qtd.mg2, dashboardData.estoque_ativo_qtd.high],
                                 backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444']
                             }]
                         },
@@ -1612,7 +1612,7 @@
                             labels: ['Low', 'MG1', 'MG2', 'High'],
                             datasets: [{
                                 label: 'Quantidade',
-                                data: [data.relatorios.aprovados, data.relatorios.pendentes, data.relatorios.reprovados, 0],
+                                data: [data.estoque_ativo_qtd.low, data.estoque_ativo_qtd.mg1, data.estoque_ativo_qtd.mg2, data.estoque_ativo_qtd.high],
                                 backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444']
                             }]
                         },
