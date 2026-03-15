@@ -843,7 +843,6 @@
             }
             
             // Cores para categorias
-            // Cores para categorias
             const categoriaCores = {
                 'HIGH_GRADE': '#10B981',  // Verde
                 'high': '#10B981',
@@ -858,7 +857,8 @@
                 'LOW_GRADE': '#EF4444',   // Vermelho
                 'low': '#EF4444',
                 'RESIDUO': '#6B7280',     // Cinza
-                'OUTRO': '#6B7280'
+                'OUTRO': '#6B7280',
+                'DIVERSOS': '#8B5CF6'     // Roxo
             };
             
             const categoriaNomes = {
@@ -873,7 +873,8 @@
                 'MG2': 'MG2',
                 'LOW_GRADE': 'Low',
                 'low': 'Low',
-                'RESIDUO': 'Resíduo'
+                'RESIDUO': 'Resíduo',
+                'DIVERSOS': 'Diversos'
             };
 
             container.innerHTML = bags.map(bag => {
@@ -902,14 +903,14 @@
                 <div class="card bag-card ${bag.status}" id="bag-${bag.id}" style="border-left-color: ${corCategoria};">
                     <div style="display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 0.5rem;">
                         <div>
+                            <h3 style="margin: 0 0 0.25rem 0; font-size: 1.15rem; font-weight: 700; color: var(--gray-800); letter-spacing: 0.02em;">
+                                <i class="fas fa-box" style="margin-right: 0.4rem; color: ${corCategoria};"></i>${bag.codigo}
+                                ${bag.categorias_mistas ? '<span class="badge badge-warning" style="margin-left: 0.5rem; font-size: 0.6rem; vertical-align: middle;">Misto</span>' : ''}
+                            </h3>
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: ${corCategoria};"></span>
-                                <h4 style="margin: 0; color: ${corCategoria};">${nomeCategoria}</h4>
+                                <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${corCategoria};"></span>
+                                <span style="font-size: 0.85rem; font-weight: 600; color: ${corCategoria};">${nomeCategoria}</span>
                             </div>
-                            <p style="margin: 0.25rem 0 0 0; font-size: 0.75rem; color: var(--gray-500);">
-                                ${bag.codigo}
-                                ${bag.categorias_mistas ? '<span class="badge badge-warning" style="margin-left: 0.5rem; font-size: 0.6rem;">Misto</span>' : ''}
-                            </p>
                         </div>
                         <span class="badge ${getBagBadgeClass(bag.status)}">${getBagStatusLabel(bag.status)}</span>
                     </div>
@@ -929,20 +930,26 @@
                             </span>
                         </div>
                         <div class="itens-bag-container" id="itens-bag-${bag.id}">
-                            ${bag.itens.map(item => `
+                            ${bag.itens.map(item => {
+                                const itemCatKey = item.classificacao_categoria || '';
+                                const itemCatCor = categoriaCores[itemCatKey] || 'var(--gray-400)';
+                                const itemCatNome = categoriaNomes[itemCatKey] || getCategoriaLabel(itemCatKey) || item.classificacao_nome || 'N/A';
+                                return `
                                 <div class="item-bag">
                                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                                        <div>
+                                        <div style="flex: 1;">
                                             <strong style="color: var(--primary-color);">${item.nome_item || item.classificacao_nome || 'Item'}</strong>
                                         </div>
-                                        <span style="font-size: 0.75rem; color: var(--gray-600);">${parseFloat(item.peso_kg || 0).toFixed(2)} kg</span>
+                                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                            <span style="font-size: 0.7rem; font-weight: 600; padding: 0.15rem 0.5rem; border-radius: 999px; background: ${itemCatCor}20; color: ${itemCatCor}; border: 1px solid ${itemCatCor}40;">${itemCatNome}</span>
+                                            <span style="font-size: 0.75rem; font-weight: bold; color: var(--gray-700);">${parseFloat(item.peso_kg || 0).toFixed(2)} kg</span>
+                                        </div>
                                     </div>
-                                    <div style="font-size: 0.75rem; margin-top: 0.25rem; color: var(--gray-500);">
-                                        ${item.classificacao_nome ? `Classificação: ${item.classificacao_nome}` : ''}
-                                        ${item.ordem_producao_numero ? ` | OP: ${item.ordem_producao_numero}` : ''}
+                                    <div style="font-size: 0.7rem; margin-top: 0.2rem; color: var(--gray-400);">
+                                        ${item.ordem_producao_numero ? `OP: ${item.ordem_producao_numero}` : ''}
                                     </div>
-                                </div>
-                            `).join('')}
+                                </div>`;
+                            }).join('')}
                         </div>
                     ` : ''}
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--gray-200);">
@@ -1777,15 +1784,36 @@
         }
 
         function renderizarVerBag(bag) {
-            const matRows = (bag.materiais || []).map(m => `
+            const verBagCores = {
+                'HIGH_GRADE': '#10B981', 'high': '#10B981',
+                'MG1': '#EAB308', 'mg1': '#EAB308', 'MID_GRADE_1': '#EAB308',
+                'MG2': '#F97316', 'mg2': '#F97316', 'MID_GRADE_2': '#F97316',
+                'LOW_GRADE': '#EF4444', 'low': '#EF4444',
+                'RESIDUO': '#6B7280', 'DIVERSOS': '#8B5CF6'
+            };
+            const verBagNomes = {
+                'HIGH_GRADE': 'High', 'high': 'High',
+                'MG1': 'MG1', 'mg1': 'MG1', 'MID_GRADE_1': 'MG1',
+                'MG2': 'MG2', 'mg2': 'MG2', 'MID_GRADE_2': 'MG2',
+                'LOW_GRADE': 'Low', 'low': 'Low',
+                'RESIDUO': 'Resíduo', 'DIVERSOS': 'Diversos'
+            };
+
+            const matRows = (bag.materiais || []).map(m => {
+                const mCatCor = verBagCores[m.categoria] || 'var(--gray-400)';
+                const mCatNome = verBagNomes[m.categoria] || getCategoriaLabel(m.categoria) || m.classificacao || 'N/A';
+                return `
                 <tr style="border-bottom:1px solid var(--gray-200);">
                     <td style="padding:0.75rem;font-weight:bold;">${m.nome}</td>
+                    <td style="padding:0.75rem;text-align:center;">
+                        <span style="font-size:0.75rem;font-weight:600;padding:0.2rem 0.6rem;border-radius:999px;background:${mCatCor}20;color:${mCatCor};border:1px solid ${mCatCor}40;">${mCatNome}</span>
+                    </td>
                     <td style="padding:0.75rem;text-align:center;">${m.fornecedor || 'N/A'}</td>
                     <td style="padding:0.75rem;text-align:right;color:var(--success-color);font-weight:bold;">${m.peso_kg.toFixed(3)} kg</td>
                     <td style="padding:0.75rem;text-align:right;color:#8b5cf6;">R$ ${m.preco_kg.toFixed(2)}</td>
                     <td style="padding:0.75rem;text-align:right;font-weight:bold;color:#059669;">R$ ${m.valor_total.toFixed(2)}</td>
-                </tr>
-            `).join('');
+                </tr>`;
+            }).join('');
 
             document.getElementById('verBagBody').innerHTML = `
                 <div class="producao-stat">
@@ -1803,16 +1831,17 @@
                         <thead>
                             <tr style="background:linear-gradient(135deg,#0891b2,#0e7490);color:white;">
                                 <th style="padding:0.75rem;text-align:left;">Material</th>
+                                <th style="padding:0.75rem;text-align:center;">Classificação</th>
                                 <th style="padding:0.75rem;text-align:center;">Fornecedor</th>
                                 <th style="padding:0.75rem;text-align:right;">Quantidade</th>
                                 <th style="padding:0.75rem;text-align:right;">Valor R$/kg</th>
                                 <th style="padding:0.75rem;text-align:right;">Total</th>
                             </tr>
                         </thead>
-                        <tbody>${matRows || '<tr><td colspan="5" style="text-align:center;padding:1rem;color:var(--gray-400);">Nenhum material</td></tr>'}</tbody>
+                        <tbody>${matRows || '<tr><td colspan="6" style="text-align:center;padding:1rem;color:var(--gray-400);">Nenhum material</td></tr>'}</tbody>
                         <tfoot>
                             <tr style="background:var(--gray-100);font-weight:bold;">
-                                <td colspan="2" style="padding:0.75rem;">TOTAL</td>
+                                <td colspan="3" style="padding:0.75rem;">TOTAL</td>
                                 <td style="padding:0.75rem;text-align:right;color:var(--success-color);">${(bag.total_peso || 0).toFixed(3)} kg</td>
                                 <td style="padding:0.75rem;text-align:right;color:#8b5cf6;">R$ ${(bag.media_preco_kg || 0).toFixed(2)}</td>
                                 <td style="padding:0.75rem;text-align:right;color:#059669;">R$ ${(bag.total_valor || 0).toFixed(2)}</td>
