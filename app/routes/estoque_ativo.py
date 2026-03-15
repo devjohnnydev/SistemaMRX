@@ -940,9 +940,11 @@ def devolver_sublote_estoque(sublote_id):
     try:
         sublote = Lote.query.get_or_404(sublote_id)
         
-        # Calcular pesos
-        itens_separados = ItemSeparadoProducao.query.filter_by(
-            entrada_estoque_id=sublote_id
+        # Calcular pesos - APENAS itens do modal de produção (sem bag)
+        # Itens já enviados para bags NÃO devem ser contados nem duplicados
+        itens_separados = ItemSeparadoProducao.query.filter(
+            ItemSeparadoProducao.entrada_estoque_id == sublote_id,
+            ItemSeparadoProducao.bag_id.is_(None)
         ).all()
         peso_separado = sum(float(i.peso_kg or 0) for i in itens_separados)
         peso_original = float(sublote.peso_liquido or sublote.peso_total_kg or 0)
@@ -1017,6 +1019,9 @@ def devolver_sublote_estoque(sublote_id):
             )
             db.session.add(novo_sublote)
             novos_sublotes.append(novo_sublote)
+            
+            # Remover o item temporário da separação pois ele agora se tornou um Lote real no estoque
+            db.session.delete(item)
         
         db.session.commit()
         
@@ -1275,9 +1280,35 @@ def adicionar_materiais_bag():
             if preco_kg <= 0:
                 preco_kg = _calcular_preco_kg_sublote(sublote)
             
+            # Determinar classificação correta do item baseada no sublote
+            item_classificacao_id = bag.classificacao_grade_id  # fallback
+            
+            # Prioridade 1: classificacao_predominante do sublote
+            if sublote.classificacao_predominante:
+                classif_match = ClassificacaoGrade.query.filter(
+                    func.lower(ClassificacaoGrade.categoria) == sublote.classificacao_predominante.lower(),
+                    ClassificacaoGrade.ativo == True
+                ).first()
+                if classif_match:
+                    item_classificacao_id = classif_match.id
+            
+            # Prioridade 2: CLASSIFICACAO nas observações do sublote
+            if item_classificacao_id == bag.classificacao_grade_id and classificacao_categoria:
+                classif_match = ClassificacaoGrade.query.filter(
+                    func.lower(ClassificacaoGrade.nome) == classificacao_categoria.lower(),
+                    ClassificacaoGrade.ativo == True
+                ).first()
+                if not classif_match:
+                    classif_match = ClassificacaoGrade.query.filter(
+                        func.lower(ClassificacaoGrade.categoria).like(f'%{classificacao_categoria.lower()}%'),
+                        ClassificacaoGrade.ativo == True
+                    ).first()
+                if classif_match:
+                    item_classificacao_id = classif_match.id
+            
             # Criar item no bag
             novo_item = ItemSeparadoProducao(
-                classificacao_grade_id=bag.classificacao_grade_id,
+                classificacao_grade_id=item_classificacao_id,
                 nome_item=nome_material,
                 peso_kg=peso_enviar,
                 quantidade=1,
