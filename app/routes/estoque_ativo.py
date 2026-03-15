@@ -857,8 +857,11 @@ def adicionar_item_separado(sublote_id):
             return jsonify({'erro': 'Classificação é obrigatória'}), 400
         
         # Verificar peso disponível
-        itens_existentes = ItemSeparadoProducao.query.filter_by(
-            entrada_estoque_id=sublote_id
+        # Apenas contar itens que NÃO estão em bags (itens sendo separados na produção)
+        # Itens já enviados para bags foram processados por outra rota e não devem contar aqui
+        itens_existentes = ItemSeparadoProducao.query.filter(
+            ItemSeparadoProducao.entrada_estoque_id == sublote_id,
+            ItemSeparadoProducao.bag_id.is_(None)
         ).all()
         peso_ja_separado = sum(float(i.peso_kg or 0) for i in itens_existentes)
         peso_original = float(sublote.peso_liquido or sublote.peso_total_kg or 0)
@@ -1047,9 +1050,10 @@ def listar_em_separacao():
         for lote in lotes_em_producao:
             peso_original = float(lote.peso_liquido or lote.peso_total_kg or 0)
             
-            # Contar itens separados
-            itens = ItemSeparadoProducao.query.filter_by(
-                entrada_estoque_id=lote.id
+            # Contar itens separados (apenas os sem bag - mesmos da produção modal)
+            itens = ItemSeparadoProducao.query.filter(
+                ItemSeparadoProducao.entrada_estoque_id == lote.id,
+                ItemSeparadoProducao.bag_id.is_(None)
             ).all()
             peso_separado = sum(float(i.peso_kg or 0) for i in itens)
             
