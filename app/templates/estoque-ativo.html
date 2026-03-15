@@ -288,17 +288,6 @@
             </button>
             <div class="card" style="margin-bottom: 1rem;">
                 <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                    <div class="form-group" style="flex: 1; min-width: 150px; margin-bottom: 0;">
-                        <label>Status</label>
-                        <select id="filtroStatusLote" onchange="carregarLotesAtivos()">
-                            <option value="">Todos Ativos</option>
-                            <option value="em_estoque">Em Estoque</option>
-                            <option value="disponivel">Disponível</option>
-                            <option value="aprovado">Aprovado</option>
-                            <option value="em_producao">Em Produção</option>
-                            <option value="processado">Processado</option>
-                        </select>
-                    </div>
                     <div class="form-group" style="flex: 2; min-width: 200px; margin-bottom: 0;">
                         <label>Buscar</label>
                         <input type="text" id="buscaLote" placeholder="Número do lote, fornecedor..." onkeyup="filtrarLotes()">
@@ -321,9 +310,7 @@
                         <select id="filtroStatusBag" onchange="carregarBagsEstoque()">
                             <option value="">Todos</option>
                             <option value="aberto">Abertos</option>
-                            <option value="devolvido_estoque">Devolvidos ao Estoque</option>
                             <option value="cheio">Cheios</option>
-                            <option value="enviado_refinaria">Enviados</option>
                         </select>
                     </div>
                     <div class="form-group" style="flex: 1; min-width: 150px; margin-bottom: 0;">
@@ -334,7 +321,6 @@
                             <option value="MG1">MG1</option>
                             <option value="MG2">MG2</option>
                             <option value="LOW_GRADE">Low Grade</option>
-                            <option value="RESIDUO">Resíduo</option>
                         </select>
                     </div>
                     <div class="form-group" style="flex: 2; min-width: 200px; margin-bottom: 0;">
@@ -499,8 +485,7 @@
 
         async function carregarLotesAtivos() {
             try {
-                const status = document.getElementById('filtroStatusLote').value;
-                const url = status ? `/estoque-ativo/lotes?status=${status}` : '/estoque-ativo/lotes';
+                const url = '/estoque-ativo/lotes';
                 const response = await fetchAPI(url);
                 if (response.ok) {
                     lotesAtivos = await response.json();

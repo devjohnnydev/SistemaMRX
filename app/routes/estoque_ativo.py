@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 bp = Blueprint('estoque_ativo', __name__, url_prefix='/api/estoque-ativo')
 
 # Status de lotes ativos (incluindo sublotes criados na separação)
-LOTES_ATIVOS_STATUS = ['em_estoque', 'disponivel', 'aprovado', 'em_producao', 'CRIADO_SEPARACAO', 'PROCESSADO', 'criado_separacao', 'processado']
+LOTES_ATIVOS_STATUS = ['em_estoque', 'disponivel', 'aprovado', 'em_producao', 'CRIADO_SEPARACAO', 'PROCESSADO', 'criado_separacao', 'processado', 'AGUARDANDO_SEPARACAO', 'EM_SEPARACAO']
 
 
 def _calcular_preco_kg_sublote(sublote):

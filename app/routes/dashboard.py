@@ -25,7 +25,7 @@ def obter_estatisticas():
     
     from app.models import BagProducao, ClassificacaoGrade
     
-    LOTES_ATIVOS_STATUS = ['em_estoque', 'disponivel', 'aprovado', 'em_producao', 'CRIADO_SEPARACAO', 'PROCESSADO', 'criado_separacao', 'processado']
+    LOTES_ATIVOS_STATUS = ['em_estoque', 'disponivel', 'aprovado', 'em_producao', 'CRIADO_SEPARACAO', 'PROCESSADO', 'criado_separacao', 'processado', 'AGUARDANDO_SEPARACAO', 'EM_SEPARACAO']
     BAGS_ATIVOS_STATUS = ['devolvido_estoque', 'cheio', 'aberto', 'enviado_refinaria']
 
     def obter_peso_e_qtd_por_classificacao(lote_classif, bag_conditions):
