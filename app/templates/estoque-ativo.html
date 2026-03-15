@@ -502,7 +502,7 @@
                 const response = await fetchAPI(url);
                 if (response.ok) {
                     lotesAtivos = await response.json();
-                    renderizarLotes(lotesAtivos);
+                    filtrarLotes(); // Em vez de apenas renderizarLotes(lotesAtivos), chame o filtro para que não ignore o texto
                 }
             } catch (error) {
                 console.error('Erro ao carregar lotes:', error);
@@ -516,7 +516,9 @@
                 const numero = (lote.numero_lote || '').toLowerCase();
                 const fornecedor = (lote.fornecedor_nome || '').toLowerCase();
                 const tipo = (lote.tipo_lote_nome || '').toLowerCase();
-                return numero.includes(busca) || fornecedor.includes(busca) || tipo.includes(busca);
+                const observacao = (lote.observacoes || '').toLowerCase();
+                
+                return numero.includes(busca) || fornecedor.includes(busca) || tipo.includes(busca) || observacao.includes(busca);
             });
             renderizarLotes(lotesFiltrados);
         }
@@ -645,7 +647,7 @@
                 const response = await fetchAPI(url);
                 if (response.ok) {
                     bagsEstoque = await response.json();
-                    renderizarBags(bagsEstoque);
+                    filtrarBags(); // Em vez de apenas renderizarBags(bagsEstoque), chame o filtro embutido
                 }
             } catch (error) {
                 console.error('Erro ao carregar bags:', error);
@@ -658,7 +660,8 @@
             const bagsFiltrados = bagsEstoque.filter(bag => {
                 const codigo = (bag.codigo || '').toLowerCase();
                 const classificacao = (bag.classificacao_nome || '').toLowerCase();
-                return codigo.includes(busca) || classificacao.includes(busca);
+                const catNome = (bag.categoria_nome || '').toLowerCase();
+                return codigo.includes(busca) || classificacao.includes(busca) || catNome.includes(busca);
             });
             renderizarBags(bagsFiltrados);
         }

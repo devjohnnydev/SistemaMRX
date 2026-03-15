@@ -24,22 +24,28 @@ def obter_estatisticas():
     ).scalar() or 0
     
     # Quilos por tipo de lote
-    quilos_leve = db.session.query(func.sum(Lote.peso_total_kg)).join(
+    quilos_low = db.session.query(func.sum(Lote.peso_total_kg)).join(
         TipoLote, Lote.tipo_lote_id == TipoLote.id
     ).filter(
-        TipoLote.classificacao == 'leve'
+        TipoLote.classificacao == 'low'
     ).scalar() or 0
     
-    quilos_media = db.session.query(func.sum(Lote.peso_total_kg)).join(
+    quilos_mg1 = db.session.query(func.sum(Lote.peso_total_kg)).join(
         TipoLote, Lote.tipo_lote_id == TipoLote.id
     ).filter(
-        TipoLote.classificacao == 'media'
+        TipoLote.classificacao == 'mg1'
     ).scalar() or 0
     
-    quilos_pesada = db.session.query(func.sum(Lote.peso_total_kg)).join(
+    quilos_mg2 = db.session.query(func.sum(Lote.peso_total_kg)).join(
         TipoLote, Lote.tipo_lote_id == TipoLote.id
     ).filter(
-        TipoLote.classificacao == 'pesada'
+        TipoLote.classificacao == 'mg2'
+    ).scalar() or 0
+    
+    quilos_high = db.session.query(func.sum(Lote.peso_total_kg)).join(
+        TipoLote, Lote.tipo_lote_id == TipoLote.id
+    ).filter(
+        TipoLote.classificacao == 'high'
     ).scalar() or 0
     
     # Ranking de fornecedores (top 10)
@@ -73,9 +79,10 @@ def obter_estatisticas():
         },
         'valor_total': float(valor_total),
         'quilos_por_tipo': {
-            'leve': float(quilos_leve),
-            'media': float(quilos_media),
-            'pesada': float(quilos_pesada)
+            'low': float(quilos_low),
+            'mg1': float(quilos_mg1),
+            'mg2': float(quilos_mg2),
+            'high': float(quilos_high)
         },
         'ranking_empresas': ranking_empresas
     }), 200

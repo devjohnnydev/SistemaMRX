@@ -291,7 +291,25 @@ def listar_bags_estoque():
             query = query.filter(BagProducao.status.in_(['devolvido_estoque', 'cheio', 'aberto', 'enviado_refinaria']))
 
         if categoria:
-            query = query.join(ClassificacaoGrade).filter(ClassificacaoGrade.categoria == categoria)
+            # O frontend pode enviar 'HIGH_GRADE', 'MG1', etc. e o banco pode ter 'high', 'mid_grade_1', etc.
+            cat_lower = categoria.lower()
+            if cat_lower in ['high_grade', 'high']:
+                query = query.join(ClassificacaoGrade).filter(func.lower(ClassificacaoGrade.categoria).like('%high%'))
+            elif cat_lower in ['mg1', 'mid_grade', 'mid_grade_1']:
+                query = query.join(ClassificacaoGrade).filter(
+                    (func.lower(ClassificacaoGrade.categoria) == 'mg1') | 
+                    (func.lower(ClassificacaoGrade.categoria).like('%mid_grade_1%')) |
+                    (func.lower(ClassificacaoGrade.categoria).like('%mid_grade%'))
+                )
+            elif cat_lower in ['mg2', 'mid_grade_2']:
+                query = query.join(ClassificacaoGrade).filter(
+                    (func.lower(ClassificacaoGrade.categoria) == 'mg2') | 
+                    (func.lower(ClassificacaoGrade.categoria).like('%mid_grade_2%'))
+                )
+            elif cat_lower in ['low_grade', 'low']:
+                query = query.join(ClassificacaoGrade).filter(func.lower(ClassificacaoGrade.categoria).like('%low%'))
+            else:
+                query = query.join(ClassificacaoGrade).filter(func.lower(ClassificacaoGrade.categoria) == cat_lower)
 
         bags = query.order_by(BagProducao.data_criacao.desc()).limit(200).all()
 

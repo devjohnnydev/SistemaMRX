@@ -50,8 +50,18 @@
                     </div>
                 </div>
 
-                <div class="card" style="cursor: pointer; transition: transform 0.2s; position: relative; overflow: hidden;" onclick="window.location.href='/solicitacoes.html'">
+                <div class="card" style="cursor: pointer; transition: transform 0.2s; position: relative; overflow: hidden;" onclick="window.location.href='/revisao-tabelas-admin.html'">
                     <div style="position: absolute; right: 10px; bottom: -15px; font-size: 8rem; color: rgba(0,0,0,0.04); font-weight: 900; pointer-events: none; line-height: 1; z-index: 0;">2</div>
+                    <div id="badgeTabelasPendentes" style="display: none; position: absolute; top: 10px; right: 10px; background: #ef4444; color: white; font-size: 0.75rem; font-weight: 700; padding: 0.25rem 0.5rem; border-radius: 9999px; min-width: 24px; text-align: center; z-index: 2;"></div>
+                    <div style="text-align: center; padding: var(--spacing-lg); position: relative; z-index: 1;">
+                        <i class="fas fa-file-invoice-dollar" style="font-size: 3rem; color: #f97316;"></i>
+                        <h3 style="margin-top: var(--spacing-md); font-size: 1.1rem;">Tabelas de Preços</h3>
+                        <p style="color: #666; font-size: 0.9rem; margin-top: 0.5rem;">Revisar tabelas de fornecedores</p>
+                    </div>
+                </div>
+
+                <div class="card" style="cursor: pointer; transition: transform 0.2s; position: relative; overflow: hidden;" onclick="window.location.href='/solicitacoes.html'">
+                    <div style="position: absolute; right: 10px; bottom: -15px; font-size: 8rem; color: rgba(0,0,0,0.04); font-weight: 900; pointer-events: none; line-height: 1; z-index: 0;">3</div>
                     <div style="text-align: center; padding: var(--spacing-lg); position: relative; z-index: 1;">
                         <i class="fas fa-file-alt" style="font-size: 3rem; color: #059669;"></i>
                         <h3 style="margin-top: var(--spacing-md); font-size: 1.1rem;">Compra</h3>
@@ -60,7 +70,7 @@
                 </div>
 
                 <div class="card" style="cursor: pointer; transition: transform 0.2s; position: relative; overflow: hidden;" onclick="window.location.href='/logistica.html'">
-                    <div style="position: absolute; right: 10px; bottom: -15px; font-size: 8rem; color: rgba(0,0,0,0.04); font-weight: 900; pointer-events: none; line-height: 1; z-index: 0;">3</div>
+                    <div style="position: absolute; right: 10px; bottom: -15px; font-size: 8rem; color: rgba(0,0,0,0.04); font-weight: 900; pointer-events: none; line-height: 1; z-index: 0;">4</div>
                     <div style="text-align: center; padding: var(--spacing-lg); position: relative; z-index: 1;">
                         <i class="fas fa-truck" style="font-size: 3rem; color: #10b981;"></i>
                         <h3 style="margin-top: var(--spacing-md); font-size: 1.1rem;">Logística</h3>
@@ -69,7 +79,7 @@
                 </div>
 
                 <div class="card" style="cursor: pointer; transition: transform 0.2s; position: relative; overflow: hidden;" onclick="window.location.href='/conferencia.html'">
-                    <div style="position: absolute; right: 10px; bottom: -15px; font-size: 8rem; color: rgba(0,0,0,0.04); font-weight: 900; pointer-events: none; line-height: 1; z-index: 0;">4</div>
+                    <div style="position: absolute; right: 10px; bottom: -15px; font-size: 8rem; color: rgba(0,0,0,0.04); font-weight: 900; pointer-events: none; line-height: 1; z-index: 0;">5</div>
                     <div style="text-align: center; padding: var(--spacing-lg); position: relative; z-index: 1;">
                         <i class="fas fa-clipboard-check" style="font-size: 3rem; color: #14b8a6;"></i>
                         <h3 style="margin-top: var(--spacing-md); font-size: 1.1rem;">Conferência</h3>
@@ -78,7 +88,7 @@
                 </div>
 
                 <div class="card" style="cursor: pointer; transition: transform 0.2s; position: relative; overflow: hidden;" onclick="window.location.href='/separacao-fila.html'">
-                    <div style="position: absolute; right: 10px; bottom: -15px; font-size: 8rem; color: rgba(0,0,0,0.04); font-weight: 900; pointer-events: none; line-height: 1; z-index: 0;">5</div>
+                    <div style="position: absolute; right: 10px; bottom: -15px; font-size: 8rem; color: rgba(0,0,0,0.04); font-weight: 900; pointer-events: none; line-height: 1; z-index: 0;">6</div>
                     <div style="text-align: center; padding: var(--spacing-lg); position: relative; z-index: 1;">
                         <i class="fas fa-list-ol" style="font-size: 3rem; color: #ef4444;"></i>
                         <h3 style="margin-top: var(--spacing-md); font-size: 1.1rem;">Fila de Separação</h3>
@@ -87,7 +97,7 @@
                 </div>
 
                 <div class="card" style="cursor: pointer; transition: transform 0.2s; position: relative; overflow: hidden;" onclick="window.location.href='/estoque-ativo.html'">
-                    <div style="position: absolute; right: 10px; bottom: -15px; font-size: 8rem; color: rgba(0,0,0,0.04); font-weight: 900; pointer-events: none; line-height: 1; z-index: 0;">6</div>
+                    <div style="position: absolute; right: 10px; bottom: -15px; font-size: 8rem; color: rgba(0,0,0,0.04); font-weight: 900; pointer-events: none; line-height: 1; z-index: 0;">7</div>
                     <div style="text-align: center; padding: var(--spacing-lg); position: relative; z-index: 1;">
                         <i class="fas fa-warehouse" style="font-size: 3rem; color: #0891b2;"></i>
                         <h3 style="margin-top: var(--spacing-md); font-size: 1.1rem;">Estoque Ativo</h3>
@@ -96,7 +106,7 @@
                 </div>
 
                 <div class="card" style="cursor: pointer; transition: transform 0.2s; position: relative; overflow: hidden;" onclick="window.location.href='/estoque-ativo.html#separacao'">
-                    <div style="position: absolute; right: 10px; bottom: -15px; font-size: 8rem; color: rgba(0,0,0,0.04); font-weight: 900; pointer-events: none; line-height: 1; z-index: 0;">7</div>
+                    <div style="position: absolute; right: 10px; bottom: -15px; font-size: 8rem; color: rgba(0,0,0,0.04); font-weight: 900; pointer-events: none; line-height: 1; z-index: 0;">8</div>
                     <div style="text-align: center; padding: var(--spacing-lg); position: relative; z-index: 1;">
                         <i class="fas fa-cogs" style="font-size: 3rem; color: #f59e0b;"></i>
                         <h3 style="margin-top: var(--spacing-md); font-size: 1.1rem;">Em Separação</h3>
@@ -141,23 +151,6 @@
                         <i class="fas fa-recycle" style="font-size: 3rem; color: #22c55e;"></i>
                         <h3 style="margin-top: var(--spacing-md); font-size: 1.1rem;">Aprovação de Resíduos</h3>
                         <p style="color: #666; font-size: 0.9rem; margin-top: 0.5rem;">Aprovar e gerenciar resíduos</p>
-                    </div>
-                </div>
-
-                <div class="card" style="cursor: pointer; transition: transform 0.2s; position: relative;" onclick="window.location.href='/revisao-tabelas-admin.html'">
-                    <div id="badgeTabelasPendentes" style="display: none; position: absolute; top: 10px; right: 10px; background: #ef4444; color: white; font-size: 0.75rem; font-weight: 700; padding: 0.25rem 0.5rem; border-radius: 9999px; min-width: 24px; text-align: center;"></div>
-                    <div style="text-align: center; padding: var(--spacing-lg);">
-                        <i class="fas fa-file-invoice-dollar" style="font-size: 3rem; color: #f97316;"></i>
-                        <h3 style="margin-top: var(--spacing-md); font-size: 1.1rem;">Tabelas de Precos</h3>
-                        <p style="color: #666; font-size: 0.9rem; margin-top: 0.5rem;">Revisar tabelas de fornecedores</p>
-                    </div>
-                </div>
-
-                <div class="card" style="cursor: pointer; transition: transform 0.2s;" onclick="window.location.href='/cotacoes-metais.html'">
-                    <div style="text-align: center; padding: var(--spacing-lg);">
-                        <i class="fas fa-coins" style="font-size: 3rem; color: #FFD700;"></i>
-                        <h3 style="margin-top: var(--spacing-md); font-size: 1.1rem;">Cotacoes de Metais</h3>
-                        <p style="color: #666; font-size: 0.9rem; margin-top: 0.5rem;">Cotacoes em tempo real de metais nobres</p>
                     </div>
                 </div>
 
