@@ -2278,6 +2278,8 @@ class BagProducao(db.Model):  # type: ignore
     data_envio_refinaria = db.Column(db.DateTime, nullable=True)
     enviado_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     numero_remessa = db.Column(db.String(100), nullable=True)
+    ordem_exportacao = db.Column(db.String(100), nullable=True)
+    
     
     # Controle
     criado_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
@@ -2350,6 +2352,7 @@ class BagProducao(db.Model):  # type: ignore
             'enviado_por_id': self.enviado_por_id,
             'enviado_por_nome': self.enviado_por.nome if self.enviado_por else None,
             'numero_remessa': self.numero_remessa,
+            'ordem_exportacao': self.ordem_exportacao,
             'responsavel_id': self.responsavel_id,
             'responsavel_nome': self.responsavel.nome if self.responsavel else None,
             'criado_por_id': self.criado_por_id,

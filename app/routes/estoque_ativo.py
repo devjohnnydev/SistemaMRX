@@ -3,7 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models import db, Lote, BagProducao, ItemSeparadoProducao, ClassificacaoGrade, ItemSolicitacao, MaterialBase, Usuario, Fornecedor, Solicitacao, OrdemCompra
 from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy import func
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 import logging
 
@@ -1371,7 +1371,17 @@ def fechar_bag(bag_id):
         if bag.status != 'aberto':
             return jsonify({'erro': 'Bag já está fechado'}), 400
         
+        # Generate ordem_exportacao
+        hoje_br = datetime.utcnow() - timedelta(hours=3)
+        ano = hoje_br.strftime('%Y')
+        mes = hoje_br.strftime('%m')
+        dia = hoje_br.strftime('%d')
+        dia_semana_en = hoje_br.strftime('%a')[:2]  # First two letters, e.g., 'Mo'
+        seq = bag.codigo.split('-')[-1]
+        ordem_ex = f"{ano}-{mes}-{dia}-{dia_semana_en}-{seq}"
+        
         bag.status = 'cheio'
+        bag.ordem_exportacao = ordem_ex
         bag.data_atualizacao = datetime.utcnow()
         db.session.commit()
         
