@@ -449,65 +449,79 @@ def obter_resumo_estoque():
         # Filtra apenas bags ativos que contam como estoque
         bags_ativos = ['devolvido_estoque', 'cheio', 'aberto', 'enviado_refinaria']
         
-        # Query principal: peso e custo por classificação (usando custo_proporcional dos itens separados)
+        from sqlalchemy.orm import aliased
+        from app.models import Fornecedor, Lote
+        LotePai = aliased(Lote)
+        
+        # Query: Todos itens de bags ativos com suas classificações, e fornecedores dos lotes de origem
         resultados = db.session.query(
-            ClassificacaoGrade.categoria,
-            ClassificacaoGrade.nome,
-            ClassificacaoGrade.id,
-            db.func.sum(ItemSeparadoProducao.peso_kg).label('peso_total'),
-            db.func.sum(ItemSeparadoProducao.custo_proporcional).label('custo_total')
+            ItemSeparadoProducao,
+            ClassificacaoGrade,
+            Lote,
+            LotePai
         ).join(
-            ItemSeparadoProducao.classificacao_grade
+            ClassificacaoGrade, ItemSeparadoProducao.classificacao_grade_id == ClassificacaoGrade.id
         ).join(
-            ItemSeparadoProducao.bag
+            BagProducao, ItemSeparadoProducao.bag_id == BagProducao.id
+        ).outerjoin(
+            Lote, ItemSeparadoProducao.entrada_estoque_id == Lote.id
+        ).outerjoin(
+            LotePai, Lote.lote_pai_id == LotePai.id
         ).filter(
             BagProducao.status.in_(bags_ativos)
-        ).group_by(
-            ClassificacaoGrade.categoria,
-            ClassificacaoGrade.nome,
-            ClassificacaoGrade.id
         ).all()
         
         # Estruturar resposta
         dados = {}
-        for cat, classif_nome, classif_id, peso, custo in resultados:
-            cat_key = cat or 'OUTROS'
+        for item, classif, lote_filho, lote_pai in resultados:
+            cat_key = classif.categoria or 'OUTROS'
             if cat_key not in dados:
                 dados[cat_key] = {
                     'categoria': cat_key,
                     'peso_total': 0.0,
                     'total_valor': 0.0,
-                    'classificacoes': []
+                    'itens': []
                 }
             
-            p = float(peso or 0)
-            c = float(custo or 0)
+            peso = float(item.peso_kg or 0)
+            valor = float(item.valor_estimado or item.custo_proporcional or 0)
             
-            dados[cat_key]['peso_total'] += p
-            dados[cat_key]['total_valor'] += c
+            # Buscar fornecedor
+            fornecedor_nome = 'N/A'
+            if lote_filho and lote_filho.fornecedor:
+                fornecedor_nome = lote_filho.fornecedor.nome
+            elif lote_pai and lote_pai.fornecedor:
+                fornecedor_nome = lote_pai.fornecedor.nome
+            elif item.observacoes and item.observacoes.startswith('Fornecedor:'):
+                fornecedor_nome = item.observacoes.replace('Fornecedor: ', '').strip()
             
-            # Dados da classificação
-            classif_data = {
-                'nome': classif_nome,
-                'peso': p
+            preco_kg = round(valor / peso, 2) if peso > 0 else 0.0
+            
+            dados[cat_key]['peso_total'] += peso
+            dados[cat_key]['total_valor'] += valor
+            
+            # Item individual
+            item_data = {
+                'id': item.id,
+                'nome': item.nome_item,
+                'classificacao': classif.nome,
+                'fornecedor': fornecedor_nome,
+                'peso_kg': peso
             }
             
             if is_admin_or_gestor:
-                # Calcular média de preço usando lógica "Media Ponderada Real": 
-                # (Total Valor) / (Peso Total)
-                media_preco = round(c / p, 2) if p > 0 else 0.0
-                classif_data['media_preco'] = media_preco
-                classif_data['total_valor'] = round(c, 2)
+                item_data['media_preco'] = preco_kg
+                item_data['total_valor'] = round(valor, 2)
             
-            dados[cat_key]['classificacoes'].append(classif_data)
+            dados[cat_key]['itens'].append(item_data)
             
         # Ordenar e formatar para lista (Categoria > Maior Peso Total)
         lista_final = []
         # Ordenar categorias por peso total decrescente
         for cat_key in sorted(dados.keys(), key=lambda k: dados[k]['peso_total'], reverse=True):
-            item = dados[cat_key]
-            # Ordenar classificações por peso dentro da categoria
-            item['classificacoes'].sort(key=lambda x: x['peso'], reverse=True)
+            cat_data = dados[cat_key]
+            # Ordenar itens por peso dentro da categoria
+            cat_data['itens'].sort(key=lambda x: x['peso_kg'], reverse=True)
             
             # Normalizar nome categoria para exibição (Labels amigáveis)
             cat_lower = cat_key.lower()
@@ -518,17 +532,16 @@ def obter_resumo_estoque():
                 'low_grade': 'Low Grade', 'low': 'Low Grade',
                 'residuo': 'Resíduo'
             }
-            item['categoria_label'] = labels.get(cat_lower, cat_key.replace('_', ' ').title())
+            cat_data['categoria_label'] = labels.get(cat_lower, cat_key.replace('_', ' ').title())
             
             # Adicionar flag de admin/gestor e calcular média geral da categoria
-            item['show_prices'] = is_admin_or_gestor
+            cat_data['show_prices'] = is_admin_or_gestor
             if is_admin_or_gestor:
-                # Média Geral da Categoria = (Total Valor) / (Peso Total da Categoria)
-                item['media_geral'] = round(item['total_valor'] / item['peso_total'], 2) if item['peso_total'] > 0 else 0.0
+                cat_data['media_geral'] = round(cat_data['total_valor'] / cat_data['peso_total'], 2) if cat_data['peso_total'] > 0 else 0.0
             else:
-                item['media_geral'] = 0.0
+                cat_data['media_geral'] = 0.0
             
-            lista_final.append(item)
+            lista_final.append(cat_data)
             
         return jsonify(lista_final)
 

@@ -691,19 +691,21 @@
             if (showPrices) {
                 thead.innerHTML = `
                     <tr style="background: var(--gray-100); text-align: left;">
-                        <th style="padding: 0.75rem; border-bottom: 2px solid var(--gray-300);">Classificação</th>
-                        <th style="padding: 0.75rem; border-bottom: 2px solid var(--gray-300);">Categoria</th>
-                        <th style="padding: 0.75rem; border-bottom: 2px solid var(--gray-300); text-align: right;">Peso Total</th>
-                        <th style="padding: 0.75rem; border-bottom: 2px solid var(--gray-300); text-align: right; color: #059669;">Valor Total</th>
-                        <th style="padding: 0.75rem; border-bottom: 2px solid var(--gray-300); text-align: right; color: #8b5cf6;">Média R$</th>
+                        <th style="padding: 0.75rem; border-bottom: 2px solid var(--gray-300);">Material</th>
+                        <th style="padding: 0.75rem; border-bottom: 2px solid var(--gray-300); text-align: center;">Classificação</th>
+                        <th style="padding: 0.75rem; border-bottom: 2px solid var(--gray-300); text-align: center;">Fornecedor</th>
+                        <th style="padding: 0.75rem; border-bottom: 2px solid var(--gray-300); text-align: right;">Quantidade</th>
+                        <th style="padding: 0.75rem; border-bottom: 2px solid var(--gray-300); text-align: right; color: #8b5cf6;">Valor R$/kg</th>
+                        <th style="padding: 0.75rem; border-bottom: 2px solid var(--gray-300); text-align: right; color: #059669;">Total</th>
                     </tr>
                 `;
             } else {
                 thead.innerHTML = `
                     <tr style="background: var(--gray-100); text-align: left;">
-                        <th style="padding: 0.75rem; border-bottom: 2px solid var(--gray-300);">Classificação</th>
-                        <th style="padding: 0.75rem; border-bottom: 2px solid var(--gray-300);">Categoria</th>
-                        <th style="padding: 0.75rem; border-bottom: 2px solid var(--gray-300); text-align: right;">Peso Total</th>
+                        <th style="padding: 0.75rem; border-bottom: 2px solid var(--gray-300);">Material</th>
+                        <th style="padding: 0.75rem; border-bottom: 2px solid var(--gray-300); text-align: center;">Classificação</th>
+                        <th style="padding: 0.75rem; border-bottom: 2px solid var(--gray-300); text-align: center;">Fornecedor</th>
+                        <th style="padding: 0.75rem; border-bottom: 2px solid var(--gray-300); text-align: right;">Quantidade</th>
                     </tr>
                 `;
             }
@@ -712,7 +714,7 @@
             const grid = document.getElementById('resumoGrid');
             if(!dados || dados.length === 0) {
                 grid.innerHTML = '<div class="card" style="grid-column: 1/-1; text-align: center;">Nenhum dado encontrado</div>';
-                document.getElementById('tabelaResumoBody').innerHTML = `<tr><td colspan="${showPrices ? 5 : 3}" style="text-align:center; padding: 1rem;">Nenhum registro</td></tr>`;
+                document.getElementById('tabelaResumoBody').innerHTML = `<tr><td colspan="${showPrices ? 6 : 4}" style="text-align:center; padding: 1rem;">Nenhum registro</td></tr>`;
                 return;
             }
 
@@ -725,7 +727,7 @@
                         </div>
                         <div class="stat-label" style="font-weight: bold; color: var(--gray-700);">${cat.categoria_label}</div>
                         <div style="font-size: 0.75rem; color: var(--gray-500); margin-top: 0.25rem;">
-                            ${cat.classificacoes.length} classificações
+                            ${cat.itens.length} materiais separados
                         </div>
                         ${showPrices && cat.media_geral > 0 ? `
                             <div style="font-size: 0.85rem; color: #8b5cf6; margin-top: 0.5rem; font-weight: bold;">
@@ -739,7 +741,7 @@
             // Renderizar Seções separadas por categoria
             const tbody = document.getElementById('tabelaResumoBody');
             let rows = '';
-            const colSpan = showPrices ? 5 : 3;
+            const colSpan = showPrices ? 6 : 4;
             
             dados.forEach((cat, index) => {
                 const corCategoria = categoriaCores[cat.categoria_label] || 'var(--primary-color)';
@@ -764,27 +766,26 @@
                     </tr>
                 `;
                 
-                // Calcular soma das medias
                 // Itens da categoria
-                
-                // Itens da categoria
-                cat.classificacoes.forEach(cls => {
+                cat.itens.forEach(item => {
                     if (showPrices) {
                         rows += `
                             <tr style="border-bottom: 1px solid var(--gray-200); border-left: 4px solid ${corCategoria}20;">
-                                <td style="padding: 0.75rem 0.75rem 0.75rem 2rem;">${cls.nome}</td>
-                                <td style="padding: 0.75rem;">${cat.categoria_label}</td>
-                                <td style="padding: 0.75rem; text-align: right; color: var(--success-color); font-weight: bold;">${cls.peso.toFixed(2)} kg</td>
-                                <td style="padding: 0.75rem; text-align: right; color: #059669;">R$ ${(cls.total_valor || 0).toFixed(2)}</td>
-                                <td style="padding: 0.75rem; text-align: right; color: #8b5cf6;">R$ ${(cls.media_preco || 0).toFixed(2)}</td>
+                                <td style="padding: 0.75rem 0.75rem 0.75rem 2rem; font-weight: bold;">${item.nome}</td>
+                                <td style="padding: 0.75rem; text-align: center;"><span style="font-size:0.75rem;font-weight:600;padding:0.2rem 0.6rem;border-radius:999px;background:${corCategoria}20;color:${corCategoria};border:1px solid ${corCategoria}40;">${item.classificacao || cat.categoria_label}</span></td>
+                                <td style="padding: 0.75rem; text-align: center;">${item.fornecedor || 'N/A'}</td>
+                                <td style="padding: 0.75rem; text-align: right; color: var(--success-color); font-weight: bold;">${item.peso_kg.toFixed(3)} kg</td>
+                                <td style="padding: 0.75rem; text-align: right; color: #8b5cf6;">R$ ${(item.media_preco || 0).toFixed(2)}</td>
+                                <td style="padding: 0.75rem; text-align: right; color: #059669; font-weight: bold;">R$ ${(item.total_valor || 0).toFixed(2)}</td>
                             </tr>
                         `;
                     } else {
                         rows += `
                             <tr style="border-bottom: 1px solid var(--gray-200); border-left: 4px solid ${corCategoria}20;">
-                                <td style="padding: 0.75rem 0.75rem 0.75rem 2rem;">${cls.nome}</td>
-                                <td style="padding: 0.75rem;">${cat.categoria_label}</td>
-                                <td style="padding: 0.75rem; text-align: right; color: var(--success-color); font-weight: bold;">${cls.peso.toFixed(2)} kg</td>
+                                <td style="padding: 0.75rem 0.75rem 0.75rem 2rem; font-weight: bold;">${item.nome}</td>
+                                <td style="padding: 0.75rem; text-align: center;"><span style="font-size:0.75rem;font-weight:600;padding:0.2rem 0.6rem;border-radius:999px;background:${corCategoria}20;color:${corCategoria};border:1px solid ${corCategoria}40;">${item.classificacao || cat.categoria_label}</span></td>
+                                <td style="padding: 0.75rem; text-align: center;">${item.fornecedor || 'N/A'}</td>
+                                <td style="padding: 0.75rem; text-align: right; color: var(--success-color); font-weight: bold;">${item.peso_kg.toFixed(3)} kg</td>
                             </tr>
                         `;
                     }
@@ -822,11 +823,11 @@
                 } else {
                     rows += `
                         <tr style="background: ${corCategoria}15; border-left: 4px solid ${corCategoria}; border-top: 2px solid ${corCategoria}40;">
-                            <td colspan="2" style="padding: 0.75rem 1rem; font-weight: bold; color: ${corCategoria};">
+                            <td colspan="3" style="padding: 0.75rem 1rem; font-weight: bold; color: ${corCategoria};">
                                 <i class="fas fa-calculator" style="margin-right: 0.5rem;"></i> Total ${cat.categoria_label}
                             </td>
                             <td style="padding: 0.75rem 1rem; text-align: right; font-weight: bold; font-size: 1.1rem; color: ${corCategoria};">
-                                ${cat.peso_total.toFixed(2)} kg
+                                ${cat.peso_total.toFixed(3)} kg
                             </td>
                         </tr>
                     `;
@@ -1322,20 +1323,22 @@
             
             if (tipo === 'resumo') {
                 if (showPrices) {
-                    head = [['Classificação', 'Categoria', 'Peso Total', 'Valor Total', 'Média R$']];
-                    body = dados.classificacoes.map(item => [
+                    head = [['Material', 'Classificação', 'Fornecedor', 'Quantidade', 'Valor R$/kg', 'Total']];
+                    body = dados.itens.map(item => [
                         item.nome,
-                        dados.categoria_label,
-                        `${item.peso.toFixed(2)} kg`,
-                        `R$ ${(item.total_valor || 0).toFixed(2)}`,
-                        `R$ ${(item.media_preco || 0).toFixed(2)}`
+                        item.classificacao || dados.categoria_label,
+                        item.fornecedor || 'N/A',
+                        `${item.peso_kg.toFixed(3)} kg`,
+                        `R$ ${(item.media_preco || 0).toFixed(2)}`,
+                        `R$ ${(item.total_valor || 0).toFixed(2)}`
                     ]);
                 } else {
-                    head = [['Classificação', 'Categoria', 'Peso Total']];
-                    body = dados.classificacoes.map(item => [
+                    head = [['Material', 'Classificação', 'Fornecedor', 'Quantidade']];
+                    body = dados.itens.map(item => [
                         item.nome,
-                        dados.categoria_label,
-                        `${item.peso.toFixed(2)} kg`
+                        item.classificacao || dados.categoria_label,
+                        item.fornecedor || 'N/A',
+                        `${item.peso_kg.toFixed(3)} kg`
                     ]);
                 }
             } else {
