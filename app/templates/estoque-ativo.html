@@ -836,6 +836,16 @@
             tbody.innerHTML = rows;
         }
 
+        function formatarOrdemExportacao(ordem) {
+            if (!ordem) return '';
+            // Remove the Day-of-Week part (e.g. 2026-03-16-Mo-0001 -> 2026-03-16-0001)
+            const parts = ordem.split('-');
+            if (parts.length === 5) {
+                return `${parts[0]}-${parts[1]}-${parts[2]}-${parts[4]}`;
+            }
+            return ordem;
+        }
+
         function renderizarBags(bags) {
             const container = document.getElementById('listaBags');
             if (!bags || bags.length === 0) {
@@ -922,7 +932,7 @@
                     ${bag.status === 'cheio' && bag.ordem_exportacao ? `
                     <div style="margin-top: 0.75rem; padding: 0.75rem; background: var(--gray-50); border: 1px dashed var(--gray-300); border-radius: 8px; text-align: center;">
                         <span style="font-size: 0.75rem; color: var(--gray-500); text-transform: uppercase;">Ordem de Exportação</span>
-                        <div style="font-weight: bold; font-size: 1.1rem; color: var(--gray-800); font-family: monospace;">${bag.ordem_exportacao}</div>
+                        <div style="font-weight: bold; font-size: 1.1rem; color: var(--gray-800); font-family: monospace;">${formatarOrdemExportacao(bag.ordem_exportacao)}</div>
                     </div>
                     ` : ''}
                     ${itensBreakdownHtml}

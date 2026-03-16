@@ -1389,9 +1389,8 @@ def fechar_bag(bag_id):
         ano = hoje_br.strftime('%Y')
         mes = hoje_br.strftime('%m')
         dia = hoje_br.strftime('%d')
-        dia_semana_en = hoje_br.strftime('%a')[:2]  # First two letters, e.g., 'Mo'
         seq = bag.codigo.split('-')[-1]
-        ordem_ex = f"{ano}-{mes}-{dia}-{dia_semana_en}-{seq}"
+        ordem_ex = f"{ano}-{mes}-{dia}-{seq}"
         
         bag.status = 'cheio'
         bag.ordem_exportacao = ordem_ex
