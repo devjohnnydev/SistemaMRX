@@ -772,7 +772,7 @@
                         rows += `
                             <tr style="border-bottom: 1px solid var(--gray-200); border-left: 4px solid ${corCategoria}20;">
                                 <td style="padding: 0.75rem 0.75rem 0.75rem 2rem; font-weight: bold;">${item.nome}</td>
-                                <td style="padding: 0.75rem; text-align: center;"><span style="font-size:0.75rem;font-weight:600;padding:0.2rem 0.6rem;border-radius:999px;background:${corCategoria}20;color:${corCategoria};border:1px solid ${corCategoria}40;">${item.classificacao || cat.categoria_label}</span></td>
+                                <td style="padding: 0.75rem; text-align: center;"><span style="font-size:0.75rem;font-weight:600;padding:0.2rem 0.6rem;border-radius:999px;background:${corCategoria}20;color:${corCategoria};border:1px solid ${corCategoria}40;">${cat.categoria_label}</span></td>
                                 <td style="padding: 0.75rem; text-align: center;">${item.fornecedor || 'N/A'}</td>
                                 <td style="padding: 0.75rem; text-align: right; color: var(--success-color); font-weight: bold;">${item.peso_kg.toFixed(3)} kg</td>
                                 <td style="padding: 0.75rem; text-align: right; color: #8b5cf6;">R$ ${(item.media_preco || 0).toFixed(2)}</td>
@@ -783,7 +783,7 @@
                         rows += `
                             <tr style="border-bottom: 1px solid var(--gray-200); border-left: 4px solid ${corCategoria}20;">
                                 <td style="padding: 0.75rem 0.75rem 0.75rem 2rem; font-weight: bold;">${item.nome}</td>
-                                <td style="padding: 0.75rem; text-align: center;"><span style="font-size:0.75rem;font-weight:600;padding:0.2rem 0.6rem;border-radius:999px;background:${corCategoria}20;color:${corCategoria};border:1px solid ${corCategoria}40;">${item.classificacao || cat.categoria_label}</span></td>
+                                <td style="padding: 0.75rem; text-align: center;"><span style="font-size:0.75rem;font-weight:600;padding:0.2rem 0.6rem;border-radius:999px;background:${corCategoria}20;color:${corCategoria};border:1px solid ${corCategoria}40;">${cat.categoria_label}</span></td>
                                 <td style="padding: 0.75rem; text-align: center;">${item.fornecedor || 'N/A'}</td>
                                 <td style="padding: 0.75rem; text-align: right; color: var(--success-color); font-weight: bold;">${item.peso_kg.toFixed(3)} kg</td>
                             </tr>
@@ -1158,8 +1158,7 @@
                 
                 if (isAdminOrGestor) {
                     headerHtml += `
-                        <th style="padding: 0.75rem; border-bottom: 2px solid var(--gray-300); text-align: right; color: #8b5cf6;">Média R$</th>
-                        <th style="padding: 0.75rem; border-bottom: 2px solid var(--gray-300); text-align: right; color: #059669;">Média Real R$/kg</th>
+                        <th style="padding: 0.75rem; border-bottom: 2px solid var(--gray-300); text-align: right; color: #8b5cf6;">Média/kg</th>
                     `;
                 }
                 
@@ -1171,7 +1170,7 @@
             const grid = document.getElementById('resumoCompraGrid');
             if(!dados || dados.length === 0) {
                 grid.innerHTML = '<div class="card" style="grid-column: 1/-1; text-align: center;">Nenhuma OC aprovada encontrada</div>';
-                const colspan = isAdminOrGestor ? 6 : 4;
+                const colspan = isAdminOrGestor ? 5 : 4;
                 document.getElementById('tabelaCompraBody').innerHTML = `<tr><td colspan="${colspan}" style="text-align:center; padding: 1rem;">Nenhum registro</td></tr>`;
                 return;
             }
@@ -1208,7 +1207,7 @@
             dados.forEach((cat, index) => {
                 const corCategoria = categoriaCores[cat.categoria_label] || 'var(--primary-color)';
                 const sucataLabel = sucataLabels[cat.categoria_label] || `SUCATA DE CIRCUITO IMPRESSO ${cat.categoria_label.toUpperCase().charAt(0)}`;
-                const colspan = isAdminOrGestor ? 6 : 4;
+                const colspan = isAdminOrGestor ? 5 : 4;
                 
                 // Espaço entre seções
                 if (index > 0) {
@@ -1245,8 +1244,7 @@
                     
                     if (isAdminOrGestor) {
                         rows += `
-                            <td style="padding: 0.75rem; text-align: right; color: #8b5cf6; font-weight: bold;">R$ ${mat.media_preco.toFixed(2)}</td>
-                            <td style="padding: 0.75rem; text-align: right; color: #059669; font-weight: bold;">R$ ${(mat.media_real || 0).toFixed(2)}</td>
+                            <td style="padding: 0.75rem; text-align: right; color: #8b5cf6; font-weight: bold;">R$ ${(mat.media_real || 0).toFixed(2)}</td>
                         `;
                     }
                     
@@ -1268,13 +1266,6 @@
                     </div>
                 ` : '';
 
-                const mediaRealHtml = isAdminOrGestor ? `
-                    <div style="text-align: center; padding: 0.5rem; background: white; border-radius: 6px;">
-                        <div style="font-size: 0.7rem; color: var(--gray-500); text-transform: uppercase;">Média Real/kg</div>
-                        <div style="font-weight: bold; color: #059669; font-size: 1rem;">R$ ${cat.peso_total > 0 ? (cat.total_valor / cat.peso_total).toFixed(2) : '0.00'}</div>
-                    </div>
-                ` : '';
-
                 rows += `
                     <tr style="background: ${corCategoria}15; border-left: 4px solid ${corCategoria}; border-top: 2px solid ${corCategoria}40;">
                         <td colspan="${colspan}" style="padding: 0;">
@@ -1289,7 +1280,6 @@
                                 </div>
                                 ${valorPagoHtml}
                                 ${mediaGeralHtml}
-                                ${mediaRealHtml}
                             </div>
                         </td>
                     </tr>
@@ -1353,13 +1343,12 @@
                 }
             } else {
                 // Compra sempre tem preços (pois só admin/gestor vê)
-                head = [['Material', 'Classificação', 'Peso Comprado', 'Valor Total', 'Média R$', 'Média Real R$/kg']];
+                head = [['Material', 'Classificação', 'Peso Comprado', 'Valor Total', 'Média/kg']];
                 body = dados.materiais.map(item => [
                     item.nome,
                     dados.categoria_label,
                     `${item.peso.toFixed(2)} kg`,
                     `R$ ${(item.valor || 0).toFixed(2)}`,
-                    `R$ ${(item.media_preco || 0).toFixed(2)}`,
                     `R$ ${(item.media_real || 0).toFixed(2)}`
                 ]);
             }
