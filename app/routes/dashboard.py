@@ -23,7 +23,7 @@ def obter_estatisticas():
         Lote.status == 'aprovado'
     ).scalar() or 0
     
-    from app.models import BagProducao, ClassificacaoGrade
+    from app.models import BagProducao, ClassificacaoGrade, ItemSeparadoProducao
     
     LOTES_ATIVOS_STATUS = ['em_estoque', 'disponivel', 'aprovado', 'em_producao', 'CRIADO_SEPARACAO', 'PROCESSADO', 'criado_separacao', 'processado', 'AGUARDANDO_SEPARACAO', 'EM_SEPARACAO']
     BAGS_ATIVOS_STATUS = ['devolvido_estoque', 'cheio', 'aberto', 'enviado_refinaria']
@@ -34,7 +34,8 @@ def obter_estatisticas():
         ).filter(
             TipoLote.classificacao == lote_classif,
             Lote.status.in_(LOTES_ATIVOS_STATUS),
-            Lote.bloqueado == False
+            Lote.bloqueado == False,
+            Lote.lote_pai_id.is_(None)
         ).scalar() or 0
         
         qtd_lotes = db.session.query(func.count(Lote.id)).join(
@@ -43,18 +44,23 @@ def obter_estatisticas():
             TipoLote.classificacao == lote_classif,
             Lote.status.in_(LOTES_ATIVOS_STATUS),
             Lote.bloqueado == False,
+            Lote.lote_pai_id.is_(None),
             func.coalesce(Lote.peso_liquido, Lote.peso_total_kg) > 0
         ).scalar() or 0
 
-        peso_bags = db.session.query(func.sum(BagProducao.peso_acumulado)).join(
-            ClassificacaoGrade, BagProducao.classificacao_grade_id == ClassificacaoGrade.id
+        peso_bags = db.session.query(func.sum(ItemSeparadoProducao.peso_kg)).join(
+            ClassificacaoGrade, ItemSeparadoProducao.classificacao_grade_id == ClassificacaoGrade.id
+        ).join(
+            BagProducao, ItemSeparadoProducao.bag_id == BagProducao.id
         ).filter(
             bag_conditions,
             BagProducao.status.in_(BAGS_ATIVOS_STATUS)
         ).scalar() or 0
         
-        qtd_bags = db.session.query(func.count(BagProducao.id)).join(
-            ClassificacaoGrade, BagProducao.classificacao_grade_id == ClassificacaoGrade.id
+        qtd_bags = db.session.query(func.count(ItemSeparadoProducao.id)).join(
+            ClassificacaoGrade, ItemSeparadoProducao.classificacao_grade_id == ClassificacaoGrade.id
+        ).join(
+            BagProducao, ItemSeparadoProducao.bag_id == BagProducao.id
         ).filter(
             bag_conditions,
             BagProducao.status.in_(BAGS_ATIVOS_STATUS)
