@@ -459,6 +459,18 @@
                 document.getElementById('tabBtnCompra').style.display = 'inline-flex';
             }
             
+            // Detectar perfil Producao - ocultar Total Bags e Total Compra
+            const isProducao = user.perfil_nome && 
+                (user.perfil_nome === 'Producao' || user.perfil_nome === 'Produção');
+            if (isProducao) {
+                document.querySelectorAll('.tabs .tab-btn').forEach(btn => {
+                    const text = btn.textContent.trim();
+                    if (text.includes('Total Bags') || text.includes('Total Compra')) {
+                        btn.style.display = 'none';
+                    }
+                });
+            }
+            
             await Promise.all([
                 carregarDashboardEstoque(),
                 carregarLotesAtivos(),

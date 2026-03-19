@@ -1384,13 +1384,21 @@ def fechar_bag(bag_id):
         if bag.status != 'aberto':
             return jsonify({'erro': 'Bag já está fechado'}), 400
         
-        # Generate ordem_exportacao
+        # Generate ordem_exportacao - sequential per day
         hoje_br = datetime.utcnow() - timedelta(hours=3)
         ano = hoje_br.strftime('%Y')
         mes = hoje_br.strftime('%m')
         dia = hoje_br.strftime('%d')
-        seq = bag.codigo.split('-')[-1]
-        ordem_ex = f"{ano}-{mes}-{dia}-{seq}"
+        prefixo_dia = f"{ano}-{mes}-{dia}-"
+        ultima_ordem = BagProducao.query.filter(
+            BagProducao.ordem_exportacao.like(f'{prefixo_dia}%')
+        ).order_by(BagProducao.ordem_exportacao.desc()).first()
+        if ultima_ordem and ultima_ordem.ordem_exportacao:
+            ultimo_seq = int(ultima_ordem.ordem_exportacao.split('-')[-1])
+            seq = f"{ultimo_seq + 1:04d}"
+        else:
+            seq = "0001"
+        ordem_ex = f"{prefixo_dia}{seq}"
         
         bag.status = 'cheio'
         bag.ordem_exportacao = ordem_ex
