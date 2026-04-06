@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required
 from app.models import db, Fornecedor, Solicitacao, Lote, EntradaEstoque, FornecedorTipoLotePreco, ItemSolicitacao, TipoLote, OrdemCompra, Usuario, Motorista, OrdemServico, BagProducao, MaterialBase
+from app.auth import admin_ou_auditor_required
 from sqlalchemy import func, extract, case, and_, or_
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
