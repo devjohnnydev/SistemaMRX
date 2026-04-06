@@ -682,17 +682,17 @@ def obter_main_metrics():
     valor_total_aprovado = db.session.query(func.sum(Lote.valor_total)).filter(Lote.status.in_(['aprovado', 'em_estoque', 'disponivel'])).scalar() or 0
 
     # 7. Item Mais Comprado e Classificação Mais Comprada (via Solicitacao/ItemSolicitacao aprovadas)
-    item_query = db.session.query(MaterialBase.nome, func.sum(ItemSolicitacao.peso_kg).label('total_peso'))\
+    item_query = db.session.query(MaterialBase.nome, MaterialBase.classificacao, func.sum(ItemSolicitacao.peso_kg).label('total_peso'))\
         .join(ItemSolicitacao, ItemSolicitacao.material_id == MaterialBase.id)\
         .join(Solicitacao, Solicitacao.id == ItemSolicitacao.solicitacao_id)\
         .filter(Solicitacao.status == 'aprovada')\
-        .group_by(MaterialBase.nome).order_by(func.sum(ItemSolicitacao.peso_kg).desc()).first()
+        .group_by(MaterialBase.nome, MaterialBase.classificacao).order_by(func.sum(ItemSolicitacao.peso_kg).desc()).limit(5).all()
 
     classif_query = db.session.query(MaterialBase.classificacao, func.sum(ItemSolicitacao.peso_kg).label('total_peso'))\
         .join(ItemSolicitacao, ItemSolicitacao.material_id == MaterialBase.id)\
         .join(Solicitacao, Solicitacao.id == ItemSolicitacao.solicitacao_id)\
         .filter(Solicitacao.status == 'aprovada')\
-        .group_by(MaterialBase.classificacao).order_by(func.sum(ItemSolicitacao.peso_kg).desc()).first()
+        .group_by(MaterialBase.classificacao).order_by(func.sum(ItemSolicitacao.peso_kg).desc()).limit(5).all()
 
     return jsonify({
         'top_valor': top_5_valor,
@@ -713,9 +713,13 @@ def obter_main_metrics():
             'rejeitadas': solic_rejeitadas,
             'taxa_aprovacao': round((solic_aprovadas / total_solic * 100) if total_solic > 0 else 0, 1),
             'valor_total_aprovado': float(valor_total_aprovado),
-            'item_mais_comprado': item_query.nome if item_query else 'N/A',
-            'item_mais_comprado_peso': float(item_query.total_peso) if item_query else 0,
-            'classificacao_mais_comprada': str(classif_query.classificacao).upper() if classif_query and classif_query.classificacao else 'OUTROS',
-            'classificacao_mais_comprada_peso': float(classif_query.total_peso) if classif_query else 0
+            'top_itens': [
+                {'nome': r.nome, 'classificacao': str(r.classificacao).upper() if r.classificacao else 'OUTROS', 'peso': float(r.total_peso)}
+                for r in item_query
+            ],
+            'top_classificacoes': [
+                {'classificacao': str(c.classificacao).upper() if c.classificacao else 'OUTROS', 'peso': float(c.total_peso)}
+                for c in classif_query
+            ]
         }
     }), 200
