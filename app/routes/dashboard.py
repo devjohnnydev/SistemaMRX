@@ -1,7 +1,6 @@
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required
-from app.models import db, Fornecedor, Solicitacao, Lote, EntradaEstoque, FornecedorTipoLotePreco, ItemSolicitacao, TipoLote, OrdemCompra, Usuario, Motorista, OrdemServico, BagProducao
-from app.auth import admin_ou_auditor_required
+from app.models import db, Fornecedor, Solicitacao, Lote, EntradaEstoque, FornecedorTipoLotePreco, ItemSolicitacao, TipoLote, OrdemCompra, Usuario, Motorista, OrdemServico, BagProducao, MaterialBase
 from sqlalchemy import func, extract, case, and_, or_
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
@@ -663,17 +662,16 @@ def obter_main_metrics():
 
     # 4. Métricas Relacionadas às Bags (Em Estoque / Abertas)
     bags_abertas = db.session.query(func.count(BagProducao.id)).filter(BagProducao.status == 'aberto').scalar() or 0
-    bags_cheias = db.session.query(func.count(BagProducao.id)).filter(BagProducao.status == 'cheio').scalar() or 0
-    bags_enviadas = db.session.query(func.count(BagProducao.id)).filter(BagProducao.status == 'enviado_refinaria').scalar() or 0
+    bags_fechadas = db.session.query(func.count(BagProducao.id)).filter(BagProducao.status == 'cheio').scalar() or 0
 
-    # 5. Métricas Relacionadas ao Estoque de Lotes
-    lotes_ativos = db.session.query(func.count(Lote.id)).filter(Lote.status.in_(['em_estoque', 'disponivel', 'aprovado'])).scalar() or 0
+    # 5. Métricas Relacionadas ao Estoque de Lotes (Peso Ativo seguindo regra da aba de seleção de bag)
+    lotes_ativos_status = ['em_estoque', 'disponivel', 'aprovado', 'em_producao', 'CRIADO_SEPARACAO', 'PROCESSADO', 'criado_separacao', 'processado', 'AGUARDANDO_SEPARACAO', 'EM_SEPARACAO']
+    lotes_ativos = db.session.query(func.count(Lote.id)).filter(Lote.status.in_(lotes_ativos_status)).scalar() or 0
     lotes_em_producao = db.session.query(func.count(Lote.id)).filter(Lote.status == 'em_producao').scalar() or 0
     
-    peso_total_estoque = db.session.query(func.sum(func.coalesce(Lote.peso_liquido, Lote.peso_total_kg)))\
-        .filter(Lote.status.in_(['em_estoque', 'disponivel', 'aprovado', 'em_producao']))\
-        .filter(Lote.bloqueado == False)\
-        .filter(Lote.lote_pai_id.is_(None)).scalar() or 0
+    peso_total_lotes = db.session.query(func.sum(func.coalesce(Lote.peso_liquido, Lote.peso_total_kg)))\
+        .filter(Lote.status.in_(lotes_ativos_status))\
+        .filter(Lote.bloqueado == False).scalar() or 0
 
     # 6. Novas Métricas Solicitadas (Solicitações/OCs)
     total_solic = db.session.query(func.count(Solicitacao.id)).scalar() or 0
@@ -682,25 +680,41 @@ def obter_main_metrics():
 
     valor_total_aprovado = db.session.query(func.sum(Lote.valor_total)).filter(Lote.status.in_(['aprovado', 'em_estoque', 'disponivel'])).scalar() or 0
 
+    # 7. Item Mais Comprado e Classificação Mais Comprada (via Solicitacao/ItemSolicitacao aprovadas)
+    item_query = db.session.query(MaterialBase.nome, func.sum(ItemSolicitacao.peso_kg).label('total_peso'))\
+        .join(ItemSolicitacao, ItemSolicitacao.material_id == MaterialBase.id)\
+        .join(Solicitacao, Solicitacao.id == ItemSolicitacao.solicitacao_id)\
+        .filter(Solicitacao.status == 'aprovada')\
+        .group_by(MaterialBase.nome).order_by(func.sum(ItemSolicitacao.peso_kg).desc()).first()
+
+    classif_query = db.session.query(MaterialBase.classificacao, func.sum(ItemSolicitacao.peso_kg).label('total_peso'))\
+        .join(ItemSolicitacao, ItemSolicitacao.material_id == MaterialBase.id)\
+        .join(Solicitacao, Solicitacao.id == ItemSolicitacao.solicitacao_id)\
+        .filter(Solicitacao.status == 'aprovada')\
+        .group_by(MaterialBase.classificacao).order_by(func.sum(ItemSolicitacao.peso_kg).desc()).first()
+
     return jsonify({
         'top_valor': top_5_valor,
         'top_volume': top_5_volume,
         'tabelas_ativas': qtd_tabelas,
         'bags': {
             'abertas': bags_abertas,
-            'cheias': bags_cheias,
-            'enviadas': bags_enviadas
+            'cheias': bags_fechadas
         },
         'estoque': {
             'lotes_ativos': lotes_ativos,
             'lotes_em_producao': lotes_em_producao,
-            'peso_total': float(peso_total_estoque)
+            'peso_total': float(peso_total_lotes)
         },
         'solicitacoes': {
             'total': total_solic,
             'aprovadas': solic_aprovadas,
             'rejeitadas': solic_rejeitadas,
             'taxa_aprovacao': round((solic_aprovadas / total_solic * 100) if total_solic > 0 else 0, 1),
-            'valor_total_aprovado': float(valor_total_aprovado)
+            'valor_total_aprovado': float(valor_total_aprovado),
+            'item_mais_comprado': item_query.nome if item_query else 'N/A',
+            'item_mais_comprado_peso': float(item_query.total_peso) if item_query else 0,
+            'classificacao_mais_comprada': str(classif_query.classificacao).upper() if classif_query and classif_query.classificacao else 'OUTROS',
+            'classificacao_mais_comprada_peso': float(classif_query.total_peso) if classif_query else 0
         }
     }), 200

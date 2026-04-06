@@ -362,14 +362,37 @@
                         <div class="kpi-value" id="geral-taxa">0%</div>
                     </div>
                 </div>
+                <div class="kpi-card" style="grid-column: span 2;">
+                    <div class="kpi-icon purple">
+                        <i class="fas fa-crown"></i>
+                    </div>
+                    <div class="kpi-info">
+                        <div class="kpi-label">Top Item Comprado (OC)</div>
+                        <div class="kpi-value" id="geral-top-item" style="font-size: 16px; margin-top: 4px;">-</div>
+                    </div>
+                </div>
+                <div class="kpi-card" style="grid-column: span 2;">
+                    <div class="kpi-icon warning">
+                        <i class="fas fa-layer-group"></i>
+                    </div>
+                    <div class="kpi-info">
+                        <div class="kpi-label">Top Classificação (OC)</div>
+                        <div class="kpi-value" id="geral-top-classif" style="font-size: 16px; margin-top: 4px;">-</div>
+                    </div>
+                </div>
             </div>
 
             <!-- Gráficos Gerais -->
             <div class="charts-grid">
                 <!-- TOP 5 Fornecedores VALOR (Gráfico Bar) -->
                 <div class="chart-card">
-                    <div class="chart-header">
+                    <div class="chart-header" style="display: flex; justify-content: space-between; align-items: center;">
                         <h3 class="chart-title"><i class="fas fa-dollar-sign" style="color: var(--success-color)"></i> Top 5 Fornecedores (Valor R$)</h3>
+                        <div class="chart-actions">
+                            <button onclick="toggleChartType('chartGeralValor', 'bar')" style="border:none;background:none;cursor:pointer;color:var(--gray-500);font-size:16px;margin-left:4px;"><i class="fas fa-chart-bar"></i></button>
+                            <button onclick="toggleChartType('chartGeralValor', 'pie')" style="border:none;background:none;cursor:pointer;color:var(--gray-500);font-size:16px;margin-left:4px;"><i class="fas fa-chart-pie"></i></button>
+                            <button onclick="toggleChartType('chartGeralValor', 'doughnut')" style="border:none;background:none;cursor:pointer;color:var(--gray-500);font-size:16px;margin-left:4px;"><i class="fas fa-circle-notch"></i></button>
+                        </div>
                     </div>
                     <div class="chart-container">
                         <canvas id="chartGeralValor"></canvas>
@@ -378,8 +401,13 @@
 
                 <!-- TOP 5 Fornecedores Volume -->
                 <div class="chart-card">
-                    <div class="chart-header">
+                    <div class="chart-header" style="display: flex; justify-content: space-between; align-items: center;">
                         <h3 class="chart-title"><i class="fas fa-handshake" style="color: var(--info-color)"></i> Top 5 Fornecedores (Volume Compras)</h3>
+                        <div class="chart-actions">
+                            <button onclick="toggleChartType('chartGeralVolume', 'bar')" style="border:none;background:none;cursor:pointer;color:var(--gray-500);font-size:16px;margin-left:4px;"><i class="fas fa-chart-bar"></i></button>
+                            <button onclick="toggleChartType('chartGeralVolume', 'pie')" style="border:none;background:none;cursor:pointer;color:var(--gray-500);font-size:16px;margin-left:4px;"><i class="fas fa-chart-pie"></i></button>
+                            <button onclick="toggleChartType('chartGeralVolume', 'doughnut')" style="border:none;background:none;cursor:pointer;color:var(--gray-500);font-size:16px;margin-left:4px;"><i class="fas fa-circle-notch"></i></button>
+                        </div>
                     </div>
                     <div class="chart-container">
                         <canvas id="chartGeralVolume"></canvas>
@@ -447,11 +475,11 @@
                 </div>
                 <div class="kpi-card">
                     <div class="kpi-icon danger">
-                        <i class="fas fa-truck-loading"></i>
+                        <i class="fas fa-box"></i>
                     </div>
                     <div class="kpi-info">
-                        <div class="kpi-label">Bags Cheias / Env.</div>
-                        <div class="kpi-value" id="bags-cheias-enviadas">0</div>
+                        <div class="kpi-label">Bags Fechadas</div>
+                        <div class="kpi-value" id="bags-cheias">0</div>
                     </div>
                 </div>
             </div>
@@ -459,8 +487,13 @@
             <!-- Gráfico Bags -->
             <div class="charts-grid">
                 <div class="chart-card">
-                    <div class="chart-header">
+                    <div class="chart-header" style="display: flex; justify-content: space-between; align-items: center;">
                         <h3 class="chart-title"><i class="fas fa-chart-pie" style="color: var(--primary-color)"></i> Composição das Bags</h3>
+                        <div class="chart-actions">
+                            <button onclick="toggleChartType('chartBags', 'doughnut')" style="border:none;background:none;cursor:pointer;color:var(--gray-500);font-size:16px;margin-left:4px;"><i class="fas fa-circle-notch"></i></button>
+                            <button onclick="toggleChartType('chartBags', 'pie')" style="border:none;background:none;cursor:pointer;color:var(--gray-500);font-size:16px;margin-left:4px;"><i class="fas fa-chart-pie"></i></button>
+                            <button onclick="toggleChartType('chartBags', 'bar')" style="border:none;background:none;cursor:pointer;color:var(--gray-500);font-size:16px;margin-left:4px;"><i class="fas fa-chart-bar"></i></button>
+                        </div>
                     </div>
                     <div class="chart-container">
                         <canvas id="chartBags"></canvas>
@@ -531,17 +564,19 @@
             document.getElementById('geral-tabelas').innerText = d.tabelas_ativas;
             document.getElementById('geral-lotes').innerText = d.estoque.lotes_ativos + d.estoque.lotes_em_producao;
             document.getElementById('geral-peso').innerText = d.estoque.peso_total.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            document.getElementById('geral-bags').innerText = d.bags.abertas + d.bags.cheias + d.bags.enviadas;
+            document.getElementById('geral-bags').innerText = d.bags.abertas + d.bags.cheias;
 
             // Extra metrics
             document.getElementById('geral-financeiro').innerText = formatCurrency(d.solicitacoes.valor_total_aprovado);
             document.getElementById('geral-taxa').innerText = `${d.solicitacoes.taxa_aprovacao}%`;
+            document.getElementById('geral-top-item').innerText = `${d.solicitacoes.item_mais_comprado} (${d.solicitacoes.item_mais_comprado_peso.toLocaleString('pt-BR', {maximumFractionDigits:1})}kg)`;
+            document.getElementById('geral-top-classif').innerText = `${d.solicitacoes.classificacao_mais_comprada} (${d.solicitacoes.classificacao_mais_comprada_peso.toLocaleString('pt-BR', {maximumFractionDigits:1})}kg)`;
 
             // Estoque & Bags
             document.getElementById('estoque-ativos').innerText = d.estoque.lotes_ativos;
             document.getElementById('estoque-producao').innerText = d.estoque.lotes_em_producao;
             document.getElementById('bags-abertas').innerText = d.bags.abertas;
-            document.getElementById('bags-cheias-enviadas').innerText = `${d.bags.cheias} / ${d.bags.enviadas}`;
+            document.getElementById('bags-cheias').innerText = d.bags.cheias;
         }
 
         function renderLists() {
@@ -638,13 +673,12 @@
             charts.chartBags = new Chart(ctxBags, {
                 type: 'doughnut',
                 data: {
-                    labels: ['Abertas', 'Cheias', 'Enviadas'],
+                    labels: ['Abertas', 'Cheias'],
                     datasets: [{
-                        data: [d.bags.abertas, d.bags.cheias, d.bags.enviadas],
+                        data: [d.bags.abertas, d.bags.cheias],
                         backgroundColor: [
                             'rgba(139, 92, 246, 0.8)', // purple
-                            'rgba(245, 158, 11, 0.8)', // warning
-                            'rgba(16, 185, 129, 0.8)'  // success
+                            'rgba(245, 158, 11, 0.8)'  // warning
                         ],
                         borderWidth: 0
                     }]
@@ -657,6 +691,27 @@
                         legend: { position: 'bottom' }
                     }
                 }
+            });
+        }
+
+        function toggleChartType(chartId, newType) {
+            if (!charts[chartId]) return;
+            const chart = charts[chartId];
+            
+            // Backup data and options
+            const ctx = chart.ctx;
+            const data = JSON.parse(JSON.stringify(chart.config.data));
+            const options = JSON.parse(JSON.stringify(chart.config.options));
+            
+            // Customize cutout for doughnut
+            if (newType === 'doughnut') options.cutout = '70%';
+            else delete options.cutout;
+
+            chart.destroy();
+            charts[chartId] = new Chart(ctx, {
+                type: newType,
+                data: data,
+                options: options
             });
         }
 
