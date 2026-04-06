@@ -626,3 +626,67 @@ def obter_indicadores_externos():
             ],
             'erro': 'API temporariamente indisponível - usando valores estimados'
         }), 200
+
+@bp.route('/main-metrics', methods=['GET'])
+@admin_ou_auditor_required
+def obter_main_metrics():
+    """Retorna todas as métricas principais para o novo dashboard centralizado"""
+    hoje = datetime.now()
+    mes_atual = datetime(hoje.year, hoje.month, 1)
+
+    # 1. Top 5 Fornecedores por Valor (Dinheiro)
+    top_5_valor_query = db.session.query(
+        Fornecedor.nome,
+        func.sum(Lote.valor_total).label('total_valor')
+    ).join(Lote, Lote.fornecedor_id == Fornecedor.id)\
+    .filter(Lote.status.in_(['aprovado', 'em_estoque', 'em_producao']))\
+    .group_by(Fornecedor.nome)\
+    .order_by(func.sum(Lote.valor_total).desc())\
+    .limit(5).all()
+
+    top_5_valor = [{'nome': row.nome, 'valor': float(row.total_valor or 0)} for row in top_5_valor_query]
+
+    # 2. Top 5 Fornecedores por Volume (Solicitações Aprovadas)
+    top_5_volume_query = db.session.query(
+        Fornecedor.nome,
+        func.count(Solicitacao.id).label('total_solicitacoes')
+    ).join(Solicitacao, Solicitacao.fornecedor_id == Fornecedor.id)\
+    .filter(Solicitacao.status == 'aprovada')\
+    .group_by(Fornecedor.nome)\
+    .order_by(func.count(Solicitacao.id).desc())\
+    .limit(5).all()
+
+    top_5_volume = [{'nome': row.nome, 'qtd': row.total_solicitacoes} for row in top_5_volume_query]
+
+    # 3. Quantidade de Fornecedores com Tabela Ativa
+    qtd_tabelas = db.session.query(func.count(func.distinct(FornecedorTipoLotePreco.fornecedor_id))).scalar() or 0
+
+    # 4. Métricas Relacionadas às Bags (Em Estoque / Abertas)
+    bags_abertas = db.session.query(func.count(BagProducao.id)).filter(BagProducao.status == 'aberto').scalar() or 0
+    bags_cheias = db.session.query(func.count(BagProducao.id)).filter(BagProducao.status == 'cheio').scalar() or 0
+    bags_enviadas = db.session.query(func.count(BagProducao.id)).filter(BagProducao.status == 'enviado_refinaria').scalar() or 0
+
+    # 5. Métricas Relacionadas ao Estoque de Lotes
+    lotes_ativos = db.session.query(func.count(Lote.id)).filter(Lote.status.in_(['em_estoque', 'disponivel', 'aprovado'])).scalar() or 0
+    lotes_em_producao = db.session.query(func.count(Lote.id)).filter(Lote.status == 'em_producao').scalar() or 0
+    
+    peso_total_estoque = db.session.query(func.sum(func.coalesce(Lote.peso_liquido, Lote.peso_total_kg)))\
+        .filter(Lote.status.in_(['em_estoque', 'disponivel', 'aprovado', 'em_producao']))\
+        .filter(Lote.bloqueado == False)\
+        .filter(Lote.lote_pai_id.is_(None)).scalar() or 0
+
+    return jsonify({
+        'top_valor': top_5_valor,
+        'top_volume': top_5_volume,
+        'tabelas_ativas': qtd_tabelas,
+        'bags': {
+            'abertas': bags_abertas,
+            'cheias': bags_cheias,
+            'enviadas': bags_enviadas
+        },
+        'estoque': {
+            'lotes_ativos': lotes_ativos,
+            'lotes_em_producao': lotes_em_producao,
+            'peso_total': float(peso_total_estoque)
+        }
+    }), 200
