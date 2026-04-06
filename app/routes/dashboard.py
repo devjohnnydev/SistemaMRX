@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required
-from app.models import db, Fornecedor, Solicitacao, Lote, EntradaEstoque, FornecedorTipoLotePreco, ItemSolicitacao, TipoLote, OrdemCompra, Usuario, Motorista, OrdemServico
+from app.models import db, Fornecedor, Solicitacao, Lote, EntradaEstoque, FornecedorTipoLotePreco, ItemSolicitacao, TipoLote, OrdemCompra, Usuario, Motorista, OrdemServico, BagProducao
 from app.auth import admin_ou_auditor_required
 from sqlalchemy import func, extract, case, and_, or_
 from datetime import datetime, timedelta
@@ -675,6 +675,13 @@ def obter_main_metrics():
         .filter(Lote.bloqueado == False)\
         .filter(Lote.lote_pai_id.is_(None)).scalar() or 0
 
+    # 6. Novas Métricas Solicitadas (Solicitações/OCs)
+    total_solic = db.session.query(func.count(Solicitacao.id)).scalar() or 0
+    solic_aprovadas = db.session.query(func.count(Solicitacao.id)).filter(Solicitacao.status == 'aprovada').scalar() or 0
+    solic_rejeitadas = db.session.query(func.count(Solicitacao.id)).filter(Solicitacao.status == 'rejeitada').scalar() or 0
+
+    valor_total_aprovado = db.session.query(func.sum(Lote.valor_total)).filter(Lote.status.in_(['aprovado', 'em_estoque', 'disponivel'])).scalar() or 0
+
     return jsonify({
         'top_valor': top_5_valor,
         'top_volume': top_5_volume,
@@ -688,5 +695,12 @@ def obter_main_metrics():
             'lotes_ativos': lotes_ativos,
             'lotes_em_producao': lotes_em_producao,
             'peso_total': float(peso_total_estoque)
+        },
+        'solicitacoes': {
+            'total': total_solic,
+            'aprovadas': solic_aprovadas,
+            'rejeitadas': solic_rejeitadas,
+            'taxa_aprovacao': round((solic_aprovadas / total_solic * 100) if total_solic > 0 else 0, 1),
+            'valor_total_aprovado': float(valor_total_aprovado)
         }
     }), 200

@@ -343,6 +343,25 @@
                         <div class="kpi-value" id="geral-bags">0</div>
                     </div>
                 </div>
+                <!-- Nova aba KPIs Financeiros / Operacionais na Visão Geral -->
+                <div class="kpi-card" style="grid-column: span 2;">
+                    <div class="kpi-icon success">
+                        <i class="fas fa-hand-holding-usd"></i>
+                    </div>
+                    <div class="kpi-info">
+                        <div class="kpi-label">Valor Total (Sucesso)</div>
+                        <div class="kpi-value" id="geral-financeiro">R$ 0,00</div>
+                    </div>
+                </div>
+                <div class="kpi-card" style="grid-column: span 2;">
+                    <div class="kpi-icon info">
+                        <i class="fas fa-check-double"></i>
+                    </div>
+                    <div class="kpi-info">
+                        <div class="kpi-label">Taxa de Aprovação</div>
+                        <div class="kpi-value" id="geral-taxa">0%</div>
+                    </div>
+                </div>
             </div>
 
             <!-- Gráficos Gerais -->
@@ -513,6 +532,10 @@
             document.getElementById('geral-lotes').innerText = d.estoque.lotes_ativos + d.estoque.lotes_em_producao;
             document.getElementById('geral-peso').innerText = d.estoque.peso_total.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('geral-bags').innerText = d.bags.abertas + d.bags.cheias + d.bags.enviadas;
+
+            // Extra metrics
+            document.getElementById('geral-financeiro').innerText = formatCurrency(d.solicitacoes.valor_total_aprovado);
+            document.getElementById('geral-taxa').innerText = `${d.solicitacoes.taxa_aprovacao}%`;
 
             // Estoque & Bags
             document.getElementById('estoque-ativos').innerText = d.estoque.lotes_ativos;
