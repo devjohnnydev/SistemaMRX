@@ -16,7 +16,7 @@
 
         .gm-container {
             padding: 20px;
-            padding-top: 56px;
+            padding-top: 80px;
             padding-bottom: 90px;
             max-width: 1400px;
             margin: 0 auto;
@@ -697,11 +697,16 @@ async function carregarDados() {
     icone.classList.add('fa-spin');
     try {
         const [osResp, motoristasResp, veiculosResp] = await Promise.all([
-            fetchAPI('/api/os'),
-            fetchAPI('/api/motoristas'),
-            fetchAPI('/api/veiculos'),
+            fetchAPI('/os'),
+            fetchAPI('/motoristas'),
+            fetchAPI('/veiculos'),
         ]);
-        if (!osResp.ok || !motoristasResp.ok || !veiculosResp.ok) throw new Error();
+        if (!osResp || !motoristasResp || !veiculosResp) {
+            throw new Error('Sessão expirada');
+        }
+        if (!osResp.ok || !motoristasResp.ok || !veiculosResp.ok) {
+            throw new Error('Erro na resposta do servidor');
+        }
         todasOS = await osResp.json();
         todosMotoristas = await motoristasResp.json();
         todosVeiculos = await veiculosResp.json();
@@ -711,7 +716,14 @@ async function carregarDados() {
         popularSelectsModal();
         aplicarFiltros();
     } catch (e) {
-        toast('Erro ao carregar dados', 'error');
+        console.error('Erro ao carregar dados:', e);
+        toast('Erro ao carregar dados: ' + (e.message || 'Tente novamente'), 'error');
+        document.getElementById('motoristasLista').innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-exclamation-triangle" style="color:#ef4444"></i>
+                <h3>Erro ao carregar</h3>
+                <p>${e.message || 'Verifique sua conexão e tente novamente'}</p>
+            </div>`;
     } finally {
         icone.classList.remove('fa-spin');
     }
@@ -999,7 +1011,8 @@ async function avancarStatus(osId, btn) {
     btn.classList.add('loading');
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aguarde...';
     try {
-        const resp = await fetchAPI(`/api/os/${osId}/admin-avancar-status`, { method: 'PUT' });
+        const resp = await fetchAPI(`/os/${osId}/admin-avancar-status`, { method: 'PUT' });
+        if (!resp) return;
         const data = await resp.json();
         if (resp.ok) {
             toast(`Status atualizado: ${formatarStatus(data.os.status)}`, 'success');
@@ -1063,11 +1076,12 @@ async function salvarAtribuicao() {
     if (veiculoId) body.veiculo_id = parseInt(veiculoId);
 
     try {
-        const resp = await fetchAPI(`/api/os/${osIdAtribuindo}/atribuir-motorista`, {
+        const resp = await fetchAPI(`/os/${osIdAtribuindo}/atribuir-motorista`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
         });
+        if (!resp) return;
         const data = await resp.json();
         if (resp.ok) {
             toast('Motorista atribuído com sucesso!', 'success');
@@ -1090,7 +1104,12 @@ document.getElementById('modalAtribuir').addEventListener('click', function(e) {
 });
 
 // ─── Init ───
-document.addEventListener('DOMContentLoaded', carregarDados);
+document.addEventListener('DOMContentLoaded', async () => {
+    const user = await verificarAuth();
+    if (!user) return;
+    await carregarDados();
+    await atualizarNotificacoes();
+});
 </script>
 </body>
 </html>

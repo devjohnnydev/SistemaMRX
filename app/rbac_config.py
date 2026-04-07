@@ -51,8 +51,7 @@ PERFIL_CONFIG = {
             {'id': 'usuarios', 'nome': 'Administração', 'url': '/administracao.html', 'icone': 'settings'},
             {'id': 'dashboard', 'nome': 'Dashboard', 'url': '/dashboard.html', 'icone': 'dashboard'},
             {'id': 'solicitacoes', 'nome': 'Compra', 'url': '/solicitacoes.html', 'icone': 'request_quote'},
-            {'id': 'fornecedores', 'nome': 'Fornecedores', 'url': '/fornecedores.html', 'icone': 'business'},
-            {'id': 'gestao-motoristas', 'nome': 'Gestão Motoristas', 'url': '/gestao-motoristas.html', 'icone': 'truck'}
+            {'id': 'fornecedores', 'nome': 'Fornecedores', 'url': '/fornecedores.html', 'icone': 'business'}
         ]
     },
     'Comprador (PJ)': {
