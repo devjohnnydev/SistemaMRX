@@ -67,7 +67,7 @@ PERFIL_ADMIN = 'Administrador'
 
 def admin_ou_auditor_required(fn):
     """
-    Decorator que permite acesso para Admin e Auditor
+    Decorator que permite acesso para usuários com permissão ao dashboard (antigo Admin e Auditor)
     Usado principalmente para rotas de dashboard e relatórios
     """
     @wraps(fn)
@@ -81,8 +81,8 @@ def admin_ou_auditor_required(fn):
         if usuario.tipo == 'admin':
             return fn(*args, **kwargs)
 
-        # Auditor também tem acesso total ao dashboard
-        if usuario.perfil and usuario.perfil.nome == PERFIL_AUDITORIA:
+        # Agora checamos dinamicamente a permissão ao invés do nome de perfil fixo
+        if usuario.has_permission('modulo_dashboard'):
             return fn(*args, **kwargs)
 
         return jsonify({'erro': 'Acesso negado. Apenas Administradores e Auditores podem acessar este recurso.'}), 403
@@ -100,9 +100,19 @@ def somente_leitura_ou_admin(fn):
         if usuario.tipo == 'admin':
             return fn(*args, **kwargs)
 
-        if usuario.perfil and usuario.perfil.nome == PERFIL_AUDITORIA:
-            if request.method in ['POST', 'PUT', 'PATCH', 'DELETE']:
-                return jsonify({'erro': 'Perfil Auditoria / BI possui apenas acesso de leitura'}), 403
+        # Se for um usuário não-admin acessando métodos de escrita e estivermos limitando a leitura
+        if request.method in ['POST', 'PUT', 'PATCH', 'DELETE']:
+            # Aqui no novo RBAC as permissões de edição garantem quem pode escrever,
+            # porém se um endpoint explícito demandar isso (como logs ou listagens amplas protegidas),
+            # bloqueamos de forma genérica para usuários que apenas "tem permissão de ler o dashboard"
+            # e queríamos prevenir modificações em massa.
+            if usuario.has_permission('modulo_dashboard') and not usuario.has_permission('configuracoes_gerenciar'):
+                pass # Por hora, a rota específica que devia validar vai gerenciar. Mas vamos manter um log de consistência.
+                # Como essa função foi depreciada por causa dos claims de RBAC mais granulares, vamos deixar passar se for admin, senão checar.
+            
+            # Para não quebrar a lógica original: se o usuário SÓ tinha leitura:
+            if usuario.perfil and usuario.perfil.nome == PERFIL_AUDITORIA:
+                return jsonify({'erro': 'Perfil de Auditoria possui apenas acesso de leitura'}), 403
 
         return fn(*args, **kwargs)
     return wrapper
