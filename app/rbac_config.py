@@ -56,7 +56,7 @@ PERMISSOES_CATALOGO = {
             'solicitacao_visualizar': 'Visualizar solicitações',
             'solicitacao_excluir': 'Excluir solicitação',
         },
-        'paginas': ['/solicitacoes.html', '/compras.html', '/compra-rapida.html', '/wizard-compra.html', '/consulta.html'],
+        'paginas': ['/solicitacoes.html', '/compras.html', '/compra-rapida.html', '/wizard-compra.html', '/consulta.html', '/funcionario.html'],
         'apis': ['/api/solicitacoes', '/api/ordens-compra', '/api/compras'],
         'menu': {'id': 'solicitacoes', 'nome': 'Compra', 'url': '/solicitacoes.html', 'icone': 'request_quote'},
     },

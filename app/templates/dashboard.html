@@ -526,9 +526,9 @@
             const userData = await verificarAuth();
             if (!userData) return;
 
-            if (userData.tipo !== 'admin' && userData.perfil !== 'Auditoria / BI') {
-                console.log('Acesso restrito');
-                window.location.href = '/funcionario.html';
+            if (userData.tipo !== 'admin' && (!userData.permissoes || !userData.permissoes.includes('modulo_dashboard'))) {
+                console.log('Acesso restrito para o Dashboard');
+                window.location.href = '/administracao.html';
                 return;
             }
 
