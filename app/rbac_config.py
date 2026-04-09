@@ -332,6 +332,22 @@ PERMISSOES_CATALOGO = {
         'apis': ['/api/configuracoes'],
         'menu': None,
     },
+    'modelos_tabela': {
+        'nome': 'Modelos de Tabela de Preço',
+        'icone': 'fas fa-layer-group',
+        'cor': '#6366f1',
+        'permissoes': {
+            'modulo_modelos_tabela': 'Acesso aos Modelos de Tabela',
+            'modelo_tabela_criar': 'Criar modelo de tabela',
+            'modelo_tabela_editar': 'Editar modelo de tabela',
+            'modelo_tabela_excluir': 'Excluir modelo de tabela',
+            'modelo_tabela_visualizar': 'Visualizar modelos de tabela',
+            'modelo_tabela_aplicar': 'Aplicar modelo ao fornecedor',
+        },
+        'paginas': ['/modelos-tabela-preco.html'],
+        'apis': ['/api/modelos-tabela-preco'],
+        'menu': None,
+    },
 }
 
 # Páginas SEMPRE permitidas para qualquer usuário autenticado
